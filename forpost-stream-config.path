@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch Forpost Stream config for changes
+
+[Path]
+PathModified=/home/rpidrone/FORPOST/stream/stream.conf
+Unit=forpost-stream-restart.service
+
+[Install]
+WantedBy=multi-user.target

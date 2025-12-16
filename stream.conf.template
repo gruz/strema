@@ -1,0 +1,34 @@
+# Configuration for FORPOST video streaming
+
+# Forpost IP address (RTSP source)
+# Use "auto" for automatic detection or specify a specific IP
+FORPOST_IP=auto
+
+# RTSP port
+RTSP_PORT=8554
+
+# Video device
+VIDEO_DEVICE=devvideo0
+
+# RTMP URL (full URL including stream key)
+# Example: rtmps://live26.streaming.delta.mil.gov.ua:8443/live/XXX
+RTMP_URL=__RTMP_URL__
+
+# Overlay font size (smaller size = less CPU load)
+OVERLAY_FONTSIZE=16
+
+# Overlay transparency (0.0 = transparent, 1.0 = opaque)
+OVERLAY_BG_OPACITY=0.5
+OVERLAY_TEXT_OPACITY=1.0
+
+# Video quality (higher value = lower quality, less CPU load)
+# Recommended: 28-32 for low CPU, 23-27 for better quality
+VIDEO_CRF=28
+
+# Text to display on video
+# Leave empty to disable overlay
+OVERLAY_TEXT="__OVERLAY_TEXT__"
+
+# Show current frequency (true/false)
+# Frequency updates every 2 seconds
+SHOW_FREQUENCY=true
