@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FORPOST Stream - Конфігурація</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .cpu-mode-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+            margin-left: 8px;
+        }
+
+        .cpu-normal {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .cpu-high {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group .help-text {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 FORPOST Stream</h1>
+            <p>Конфігурація відеопотоку</p>
+            <div>
+                <span id="statusBadge"></span>
+                <span id="cpuModeBadge" class="cpu-mode-badge"></span>
+            </div>
+        </div>
+
+        <div id="alertBox" class="alert"></div>
+
+        <div class="card">
+            <div class="section-title">Керування стрімінгом</div>
+            
+            <div class="button-group">
+                <button type="button" class="btn btn-primary" id="startBtn">
+                    ▶️ Запустити стрім
+                </button>
+                <button type="button" class="btn btn-secondary" id="stopBtn">
+                    ⏹️ Зупинити стрім
+                </button>
+                <button type="button" class="btn btn-secondary" id="restartStreamBtn">
+                    🔄 Перезапустити стрім
+                </button>
+            </div>
+
+            <div class="form-group" style="margin-top: 20px;">
+                <label>
+                    <input type="checkbox" id="autostartCheckbox" style="width: auto; margin-right: 8px;">
+                    Автозапуск стріму при завантаженні системи
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="autorestartCheckbox" style="width: auto; margin-right: 8px;">
+                    Автоматичний перезапуск трансляції
+                </label>
+                <span class="help-text">Допомагає запобігти зависанню стріму</span>
+            </div>
+
+            <div class="form-group" id="autorestartIntervalGroup" style="display: none;">
+                <label for="autorestartInterval">Період перезапуску (години)</label>
+                <input type="number" id="autorestartInterval" min="1" max="24" value="2" style="width: 100px;">
+            </div>
+        </div>
+
+        <div class="card">
+            <form id="configForm">
+                <div class="section-title">Основні налаштування</div>
+
+                <div class="form-group">
+                    <label for="RTMP_URL">RTMP URL</label>
+                    <span class="help-text">Повний URL для стріму (напр. rtmps://server:port/app/key)</span>
+                    <input type="text" id="RTMP_URL" name="RTMP_URL" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="FORPOST_IP">IP адреса FORPOST</label>
+                    <span class="help-text">Використовуйте "auto" для автоматичного визначення</span>
+                    <input type="text" id="FORPOST_IP" name="FORPOST_IP" value="auto">
+                </div>
+
+                <div class="form-group">
+                    <label for="RTSP_PORT">RTSP порт</label>
+                    <input type="number" id="RTSP_PORT" name="RTSP_PORT" value="8554">
+                </div>
+
+                <div class="form-group">
+                    <label for="VIDEO_DEVICE">Відео пристрій</label>
+                    <input type="text" id="VIDEO_DEVICE" name="VIDEO_DEVICE" value="devvideo0">
+                </div>
+
+                <div class="section-title">Оверлей</div>
+
+                <div class="form-group">
+                    <label for="OVERLAY_TEXT">Текст оверлею ⚠️</label>
+                    <span class="help-text">Залиште пустим щоб вимкнути оверлей</span>
+                    <span class="help-text" style="color: #d9534f; font-weight: 600;">⚠️ УВАГА: Оверлей суттєво збільшує навантаження на CPU! Використовуйте обережно.</span>
+                    <input type="text" id="OVERLAY_TEXT" name="OVERLAY_TEXT">
+                </div>
+
+                <div class="form-group">
+                    <label for="OVERLAY_POSITION">Позиція оверлею</label>
+                    <select id="OVERLAY_POSITION" name="OVERLAY_POSITION">
+                        <option value="top-left">Зверху зліва</option>
+                        <option value="top-right">Зверху справа</option>
+                        <option value="bottom-left">Знизу зліва</option>
+                        <option value="bottom-right">Знизу справа</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="SHOW_FREQUENCY">Показувати частоту ⚠️</label>
+                    <span class="help-text" style="color: #d9534f; font-weight: 600;">⚠️ УВАГА: Відображення частоти суттєво збільшує навантаження на CPU! Використовуйте обережно.</span>
+                    <select id="SHOW_FREQUENCY" name="SHOW_FREQUENCY">
+                        <option value="true">Так</option>
+                        <option value="false">Ні</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="FREQUENCY_POSITION">Позиція частоти</label>
+                    <select id="FREQUENCY_POSITION" name="FREQUENCY_POSITION">
+                        <option value="top-left">Зверху зліва</option>
+                        <option value="top-right">Зверху справа</option>
+                        <option value="bottom-left">Знизу зліва</option>
+                        <option value="bottom-right">Знизу справа</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="OVERLAY_FONTSIZE">Розмір шрифту</label>
+                    <input type="number" id="OVERLAY_FONTSIZE" name="OVERLAY_FONTSIZE" value="16" min="8" max="48">
+                </div>
+
+                <div class="form-group">
+                    <label for="OVERLAY_BG_OPACITY">Прозорість фону (0.0 - 1.0)</label>
+                    <input type="number" id="OVERLAY_BG_OPACITY" name="OVERLAY_BG_OPACITY" value="0.5" min="0" max="1" step="0.1">
+                </div>
+
+                <div class="form-group">
+                    <label for="OVERLAY_TEXT_OPACITY">Прозорість тексту (0.0 - 1.0)</label>
+                    <input type="number" id="OVERLAY_TEXT_OPACITY" name="OVERLAY_TEXT_OPACITY" value="1.0" min="0" max="1" step="0.1">
+                </div>
+
+                <div class="section-title">Якість відео</div>
+
+                <div class="form-group">
+                    <label for="VIDEO_CRF">CRF (якість відео)</label>
+                    <span class="help-text">28-32 = низький CPU, 23-27 = краща якість</span>
+                    <input type="number" id="VIDEO_CRF" name="VIDEO_CRF" value="28" min="18" max="35">
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary" id="saveBtn">
+                        💾 Зберегти конфігурацію
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.textContent = message;
+            alertBox.className = `alert alert-${type} show`;
+            setTimeout(() => {
+                alertBox.classList.remove('show');
+            }, 5000);
+        }
+
+        function updateStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    const badge = document.getElementById('statusBadge');
+                    if (data.active) {
+                        badge.className = 'status-badge status-active';
+                        badge.textContent = '● Активний';
+                    } else {
+                        badge.className = 'status-badge status-inactive';
+                        badge.textContent = '● Неактивний';
+                    }
+                    
+                    // Update autostart checkbox
+                    const checkbox = document.getElementById('autostartCheckbox');
+                    if (checkbox) {
+                        checkbox.checked = data.autostart || false;
+                    }
+                })
+                .catch(err => console.error('Failed to fetch status:', err));
+        }
+
+        function updateCpuModeBadge(config) {
+            const badge = document.getElementById('cpuModeBadge');
+            const hasOverlay = config.OVERLAY_TEXT && config.OVERLAY_TEXT.trim() !== '';
+            const showFreq = config.SHOW_FREQUENCY === 'true';
+            
+            if (hasOverlay || showFreq) {
+                badge.className = 'cpu-mode-badge cpu-high';
+                let features = [];
+                if (hasOverlay) features.push('оверлей');
+                if (showFreq) features.push('частота');
+                badge.textContent = '⚠️ Високе навантаження CPU (' + features.join(', ') + ')';
+            } else {
+                badge.className = 'cpu-mode-badge cpu-normal';
+                badge.textContent = '✓ Штатний режим';
+            }
+        }
+
+        function loadConfig() {
+            fetch('/api/config')
+                .then(response => response.json())
+                .then(data => {
+                    const config = data.config;
+                    for (const [key, value] of Object.entries(config)) {
+                        const input = document.getElementById(key);
+                        if (input) {
+                            input.value = value;
+                        }
+                    }
+                    updateCpuModeBadge(config);
+                })
+                .catch(err => {
+                    showAlert('Помилка завантаження конфігурації: ' + err.message, 'error');
+                });
+        }
+
+        document.getElementById('configForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const config = {};
+            for (const [key, value] of formData.entries()) {
+                config[key] = value;
+            }
+
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '⏳ Збереження...';
+
+            fetch('/api/config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(config)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ ' + data.message, 'success');
+                    loadConfig();
+                } else {
+                    showAlert('❌ ' + data.error, 'error');
+                }
+            })
+            .catch(err => {
+                showAlert('❌ Помилка: ' + err.message, 'error');
+            })
+            .finally(() => {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '💾 Зберегти конфігурацію';
+            });
+        });
+
+        // Start stream button
+        document.getElementById('startBtn').addEventListener('click', function() {
+            const btn = this;
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Запуск...';
+
+            fetch('/api/stream/start', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ ' + data.message, 'success');
+                    setTimeout(updateStatus, 1000);
+                } else {
+                    showAlert('❌ ' + data.error, 'error');
+                }
+            })
+            .catch(err => {
+                showAlert('❌ Помилка: ' + err.message, 'error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            });
+        });
+
+        // Stop stream button
+        document.getElementById('stopBtn').addEventListener('click', function() {
+            if (!confirm('Ви впевнені, що хочете зупинити стрім?')) {
+                return;
+            }
+
+            const btn = this;
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Зупинка...';
+
+            fetch('/api/stream/stop', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ ' + data.message, 'success');
+                    setTimeout(updateStatus, 1000);
+                } else {
+                    showAlert('❌ ' + data.error, 'error');
+                }
+            })
+            .catch(err => {
+                showAlert('❌ Помилка: ' + err.message, 'error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            });
+        });
+
+        // Restart stream button
+        document.getElementById('restartStreamBtn').addEventListener('click', function() {
+            if (!confirm('Ви впевнені, що хочете перезапустити стрім?')) {
+                return;
+            }
+
+            const btn = this;
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Перезапуск...';
+
+            fetch('/api/stream/restart', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ ' + data.message, 'success');
+                    setTimeout(updateStatus, 2000);
+                } else {
+                    showAlert('❌ ' + data.error, 'error');
+                }
+            })
+            .catch(err => {
+                showAlert('❌ Помилка: ' + err.message, 'error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            });
+        });
+
+        // Autostart checkbox
+        document.getElementById('autostartCheckbox').addEventListener('change', function() {
+            const enable = this.checked;
+            
+            fetch('/api/stream/autostart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ enable: enable })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ ' + data.message, 'success');
+                } else {
+                    showAlert('❌ ' + data.error, 'error');
+                    // Revert checkbox on error
+                    this.checked = !enable;
+                }
+            })
+            .catch(err => {
+                showAlert('❌ Помилка: ' + err.message, 'error');
+                // Revert checkbox on error
+                this.checked = !enable;
+            });
+        });
+
+        // Auto-restart checkbox
+        document.getElementById('autorestartCheckbox').addEventListener('change', function() {
+            const enable = this.checked;
+            const intervalGroup = document.getElementById('autorestartIntervalGroup');
+            
+            // Show/hide interval input
+            intervalGroup.style.display = enable ? 'block' : 'none';
+            
+            const interval = parseInt(document.getElementById('autorestartInterval').value) || 2;
+            
+            fetch('/api/autorestart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ enabled: enable, interval: interval })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ ' + data.message, 'success');
+                } else {
+                    showAlert('❌ ' + data.error, 'error');
+                    // Revert checkbox on error
+                    this.checked = !enable;
+                    intervalGroup.style.display = !enable ? 'block' : 'none';
+                }
+            })
+            .catch(err => {
+                showAlert('❌ Помилка: ' + err.message, 'error');
+                // Revert checkbox on error
+                this.checked = !enable;
+                intervalGroup.style.display = !enable ? 'block' : 'none';
+            });
+        });
+
+        // Auto-restart interval change
+        document.getElementById('autorestartInterval').addEventListener('change', function() {
+            const enabled = document.getElementById('autorestartCheckbox').checked;
+            if (!enabled) return;
+            
+            const interval = parseInt(this.value) || 2;
+            
+            fetch('/api/autorestart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ enabled: true, interval: interval })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ Період перезапуску оновлено: ' + interval + 'год', 'success');
+                } else {
+                    showAlert('❌ ' + data.error, 'error');
+                }
+            })
+            .catch(err => {
+                showAlert('❌ Помилка: ' + err.message, 'error');
+            });
+        });
+
+        function loadAutorestartSettings() {
+            fetch('/api/autorestart')
+                .then(response => response.json())
+                .then(data => {
+                    const checkbox = document.getElementById('autorestartCheckbox');
+                    const intervalInput = document.getElementById('autorestartInterval');
+                    const intervalGroup = document.getElementById('autorestartIntervalGroup');
+                    
+                    checkbox.checked = data.enabled || false;
+                    intervalInput.value = data.interval || 2;
+                    intervalGroup.style.display = data.enabled ? 'block' : 'none';
+                })
+                .catch(err => console.error('Failed to load auto-restart settings:', err));
+        }
+
+        loadConfig();
+        updateStatus();
+        loadAutorestartSettings();
+        setInterval(updateStatus, 10000);
+    </script>
+</body>
+</html>

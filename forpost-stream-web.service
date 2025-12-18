@@ -1,0 +1,14 @@
+[Unit]
+Description=FORPOST Stream Web Configuration Interface
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/rpidrone/FORPOST/stream
+ExecStart=/usr/bin/python3 /home/rpidrone/FORPOST/stream/web_config.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

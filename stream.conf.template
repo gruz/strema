@@ -27,8 +27,23 @@ VIDEO_CRF=28
 
 # Text to display on video
 # Leave empty to disable overlay
+# WARNING: Overlay significantly increases CPU usage! Use carefully.
 OVERLAY_TEXT="__OVERLAY_TEXT__"
+
+# Overlay text position (top-left, top-right, bottom-left, bottom-right)
+OVERLAY_POSITION=top-left
 
 # Show current frequency (true/false)
 # Frequency updates every 2 seconds
+# WARNING: Frequency display significantly increases CPU usage! Use carefully.
 SHOW_FREQUENCY=true
+
+# Frequency display position (top-left, top-right, bottom-left, bottom-right)
+FREQUENCY_POSITION=bottom-left
+
+# Auto-restart stream periodically (true/false)
+# Helps prevent stream freezing or connection issues
+AUTO_RESTART_ENABLED=false
+
+# Auto-restart interval in hours (default: 2)
+AUTO_RESTART_INTERVAL=2

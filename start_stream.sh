@@ -42,6 +42,38 @@ echo ""
 FREQ_FILE="/tmp/dzyga_freq.txt"
 FREQ_UPDATER="$SCRIPT_DIR/update_frequency.sh"
 
+# Function to calculate position coordinates
+get_position_coords() {
+    local position=$1
+    local x_coord="10"
+    local y_coord="10"
+    
+    case "$position" in
+        "top-left")
+            x_coord="10"
+            y_coord="10"
+            ;;
+        "top-right")
+            x_coord="(w-text_w-10)"
+            y_coord="10"
+            ;;
+        "bottom-left")
+            x_coord="10"
+            y_coord="(h-text_h-10)"
+            ;;
+        "bottom-right")
+            x_coord="(w-text_w-10)"
+            y_coord="(h-text_h-10)"
+            ;;
+        *)
+            x_coord="10"
+            y_coord="10"
+            ;;
+    esac
+    
+    echo "${x_coord}:${y_coord}"
+}
+
 # Build video filter and encoding parameters
 if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
     
@@ -50,19 +82,22 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
     OVERLAY_BG_OPACITY=${OVERLAY_BG_OPACITY:-0.5}
     OVERLAY_TEXT_OPACITY=${OVERLAY_TEXT_OPACITY:-1.0}
     VIDEO_CRF=${VIDEO_CRF:-30}
+    OVERLAY_POSITION=${OVERLAY_POSITION:-top-left}
+    FREQUENCY_POSITION=${FREQUENCY_POSITION:-bottom-left}
     
     # Build filter
     VF_FILTER=""
     
     # Static overlay text
     if [ -n "$OVERLAY_TEXT" ]; then
-        echo "Overlay text: $OVERLAY_TEXT"
-        VF_FILTER="drawtext=text='${OVERLAY_TEXT}':fontsize=${OVERLAY_FONTSIZE}:fontcolor=white@${OVERLAY_TEXT_OPACITY}:box=1:boxcolor=black@${OVERLAY_BG_OPACITY}:boxborderw=5:x=10:y=10"
+        echo "Overlay text: $OVERLAY_TEXT (position: $OVERLAY_POSITION)"
+        OVERLAY_COORDS=$(get_position_coords "$OVERLAY_POSITION")
+        VF_FILTER="drawtext=text='${OVERLAY_TEXT}':fontsize=${OVERLAY_FONTSIZE}:fontcolor=white@${OVERLAY_TEXT_OPACITY}:box=1:boxcolor=black@${OVERLAY_BG_OPACITY}:boxborderw=5:x=${OVERLAY_COORDS%:*}:y=${OVERLAY_COORDS#*:}"
     fi
     
     # Dynamic frequency
     if [ "$SHOW_FREQUENCY" = "true" ]; then
-        echo "Frequency: enabled (updates every 2 sec)"
+        echo "Frequency: enabled (updates every 2 sec, position: $FREQUENCY_POSITION)"
         
         # Start frequency updater in background
         if [ -x "$FREQ_UPDATER" ]; then
@@ -78,7 +113,8 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
         fi
         
         # Add frequency filter
-        FREQ_FILTER="drawtext=textfile='${FREQ_FILE}':reload=1:fontsize=${OVERLAY_FONTSIZE}:fontcolor=yellow@${OVERLAY_TEXT_OPACITY}:box=1:boxcolor=black@${OVERLAY_BG_OPACITY}:boxborderw=5:x=(w-text_w-10):y=10"
+        FREQ_COORDS=$(get_position_coords "$FREQUENCY_POSITION")
+        FREQ_FILTER="drawtext=textfile='${FREQ_FILE}':reload=1:fontsize=${OVERLAY_FONTSIZE}:fontcolor=yellow@${OVERLAY_TEXT_OPACITY}:box=1:boxcolor=black@${OVERLAY_BG_OPACITY}:boxborderw=5:x=${FREQ_COORDS%:*}:y=${FREQ_COORDS#*:}"
         
         if [ -n "$VF_FILTER" ]; then
             VF_FILTER="${VF_FILTER},${FREQ_FILTER}"
