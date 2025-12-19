@@ -2,7 +2,7 @@
 Description=Watch Forpost Stream config for changes
 
 [Path]
-PathModified=/home/rpidrone/FORPOST/strema/stream.conf
+PathModified=__INSTALL_DIR__/stream.conf
 Unit=forpost-stream-restart.service
 
 [Install]

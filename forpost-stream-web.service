@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/home/rpidrone/FORPOST/strema
-ExecStart=/usr/bin/python3 /home/rpidrone/FORPOST/strema/web_config.py
+WorkingDirectory=__INSTALL_DIR__
+ExecStart=/usr/bin/python3 __INSTALL_DIR__/web_config.py
 Restart=on-failure
 RestartSec=5
 

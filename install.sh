@@ -105,10 +105,11 @@ echo "All files in place."
 # Install systemd service
 echo ""
 echo "[4/6] Installing systemd services..."
-cp "$SERVICE_FILE" /etc/systemd/system/
-cp "$SCRIPT_DIR/forpost-stream-config.path" /etc/systemd/system/
+# Replace __INSTALL_DIR__ placeholder with actual script directory
+sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SERVICE_FILE" > /etc/systemd/system/forpost-stream.service
+sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/forpost-stream-config.path" > /etc/systemd/system/forpost-stream-config.path
+sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/forpost-stream-web.service" > /etc/systemd/system/forpost-stream-web.service
 cp "$SCRIPT_DIR/forpost-stream-restart.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/forpost-stream-web.service" /etc/systemd/system/
 cp "$SCRIPT_DIR/forpost-stream-autorestart.timer" /etc/systemd/system/
 cp "$SCRIPT_DIR/forpost-stream-autorestart.service" /etc/systemd/system/
 systemctl daemon-reload
