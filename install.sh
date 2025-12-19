@@ -120,10 +120,10 @@ echo "[5/6] Enabling services..."
 # Stream service is disabled by default - control via web interface
 systemctl disable "$SERVICE_NAME" 2>/dev/null || true
 systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-# Config watcher is disabled by default
-systemctl disable forpost-stream-config.path 2>/dev/null || true
-systemctl stop forpost-stream-config.path 2>/dev/null || true
-# Only web interface is enabled and started
+# Enable config watcher for automatic restart on config changes
+systemctl enable forpost-stream-config.path
+systemctl start forpost-stream-config.path
+# Enable and start web interface
 systemctl enable forpost-stream-web
 systemctl start forpost-stream-web
 
