@@ -254,6 +254,7 @@
                     <input type="checkbox" id="autostartCheckbox" style="width: auto; margin-right: 8px;">
                     Автозапуск стріму при завантаженні системи
                 </label>
+                <span class="help-text">Якщо увімкнено, то трансляція у Вежу стартує при включенні Дзиги. Інакше її треба вручну запустити через цей інтерфейс.</span>
             </div>
 
             <div class="form-group">
@@ -261,7 +262,7 @@
                     <input type="checkbox" id="autorestartCheckbox" style="width: auto; margin-right: 8px;">
                     Автоматичний перезапуск трансляції
                 </label>
-                <span class="help-text">Допомагає запобігти зависанню стріму</span>
+                <span class="help-text">Дозволяє автоматично розбивати трансляцію у Вежі на блоки</span>
             </div>
 
             <div class="form-group" id="autorestartIntervalGroup" style="display: none;">
@@ -278,22 +279,6 @@
                     <label for="RTMP_URL">RTMP URL</label>
                     <span class="help-text">Повний URL для стріму (напр. rtmps://server:port/app/key)</span>
                     <input type="text" id="RTMP_URL" name="RTMP_URL" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="FORPOST_IP">IP адреса FORPOST</label>
-                    <span class="help-text">Використовуйте "auto" для автоматичного визначення</span>
-                    <input type="text" id="FORPOST_IP" name="FORPOST_IP" value="auto">
-                </div>
-
-                <div class="form-group">
-                    <label for="RTSP_PORT">RTSP порт</label>
-                    <input type="number" id="RTSP_PORT" name="RTSP_PORT" value="8554">
-                </div>
-
-                <div class="form-group">
-                    <label for="VIDEO_DEVICE">Відео пристрій</label>
-                    <input type="text" id="VIDEO_DEVICE" name="VIDEO_DEVICE" value="devvideo0">
                 </div>
 
                 <div class="section-title">Оверлей</div>
@@ -357,6 +342,26 @@
                     <input type="number" id="VIDEO_CRF" name="VIDEO_CRF" value="28" min="18" max="35">
                 </div>
 
+                <details style="margin-top: 16px;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #333;">Розширені налаштування</summary>
+
+                    <div class="form-group" style="margin-top: 16px;">
+                        <label for="FORPOST_IP">IP адреса FORPOST</label>
+                        <span class="help-text">Використовуйте "auto" для автоматичного визначення</span>
+                        <input type="text" id="FORPOST_IP" name="FORPOST_IP" value="auto">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="RTSP_PORT">RTSP порт</label>
+                        <input type="number" id="RTSP_PORT" name="RTSP_PORT" value="8554">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="VIDEO_DEVICE">Відео пристрій</label>
+                        <input type="text" id="VIDEO_DEVICE" name="VIDEO_DEVICE" value="devvideo0">
+                    </div>
+                </details>
+
                 <div class="button-group">
                     <button type="submit" class="btn btn-primary" id="saveBtn">
                         💾 Зберегти конфігурацію
@@ -408,7 +413,7 @@
                 let features = [];
                 if (hasOverlay) features.push('оверлей');
                 if (showFreq) features.push('частота');
-                badge.textContent = '⚠️ Високе навантаження CPU (' + features.join(', ') + ')';
+                badge.textContent = '⚠️ Високе навантаження CPU (' + features.join(', ') + '). За умови стабільної роботи це не є критичним. У разі затримок або нестабільності трансляції рекомендується вимкнути відповідні параметри нижче. У такому випадку текст та/або частота не відображатимуться на відео, проте навантаження на пристрій буде мінімальним.';
             } else {
                 badge.className = 'cpu-mode-badge cpu-normal';
                 badge.textContent = '✓ Штатний режим';
