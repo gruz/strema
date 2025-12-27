@@ -94,9 +94,16 @@ echo "Installation complete!"
 echo "=========================================="
 echo ""
 echo "[6/6] Getting network information..."
-IP_ADDRESS=$(hostname -I | awk '{print $1}')
+IP_ADDRESS=$(echo "${SSH_CONNECTION:-}" | awk '{print $3}')
+if [ -z "$IP_ADDRESS" ]; then
+    IP_ADDRESS=$(hostname -I | awk '{print $1}')
+fi
+ALL_IPS=$(hostname -I 2>/dev/null | xargs)
 echo ""
 echo "🌐 Web Interface: http://$IP_ADDRESS:8081"
+if [ -n "$ALL_IPS" ]; then
+    echo "   (All IPs: $ALL_IPS)"
+fi
 echo ""
 echo "⚠️  Stream service is DISABLED by default."
 echo "   Use the web interface to start/stop/configure streaming."
