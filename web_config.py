@@ -11,6 +11,15 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 CONFIG_FILE = SCRIPT_DIR / 'stream.conf'
 CONFIG_TEMPLATE = SCRIPT_DIR / 'stream.conf.template'
 
+
+def is_config_ready(config: dict) -> bool:
+    rtmp = (config.get('RTMP_URL') or '').strip()
+    if not rtmp:
+        return False
+    if '__RTMP_URL__' in rtmp:
+        return False
+    return True
+
 def parse_config():
     """Parse configuration file into a dictionary."""
     config = {}
@@ -104,7 +113,33 @@ def save_config(config_data):
 def index():
     """Main page with configuration editor."""
     config, comments = parse_config()
+    config_exists = CONFIG_FILE.exists()
+    if (not config_exists) or (not is_config_ready(config)):
+        return render_template('installer.html', config=config)
     return render_template('index.html', config=config, comments=comments)
+
+
+@app.route('/api/installer', methods=['POST'])
+def installer_save():
+    """API endpoint for first-run installer (minimal required settings)."""
+    try:
+        data = request.json or {}
+        rtmp_url = (data.get('RTMP_URL') or '').strip()
+        overlay_text = (data.get('OVERLAY_TEXT') or '')
+
+        if not rtmp_url:
+            return jsonify({'success': False, 'error': 'RTMP URL is required'}), 400
+
+        success, message = save_config({
+            'RTMP_URL': rtmp_url,
+            'OVERLAY_TEXT': overlay_text,
+        })
+
+        if success:
+            return jsonify({'success': True, 'message': message})
+        return jsonify({'success': False, 'error': message}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/config', methods=['GET'])
 def get_config():
@@ -130,10 +165,13 @@ def update_config():
 def start_service():
     """API endpoint to start the streaming service."""
     try:
+        config, _ = parse_config()
+        if not is_config_ready(config):
+            return jsonify({'success': False, 'error': 'Спочатку заповніть RTMP URL у налаштуваннях і збережіть конфігурацію'}), 400
+
         result = os.system('sudo systemctl start forpost-stream')
         if result == 0:
             # Start auto-restart timer if enabled
-            config, _ = parse_config()
             if config.get('AUTO_RESTART_ENABLED', 'false') == 'true':
                 os.system('sudo systemctl start forpost-stream-autorestart.timer')
             return jsonify({'success': True, 'message': 'Stream started successfully'})
@@ -160,6 +198,10 @@ def stop_service():
 def restart_service():
     """API endpoint to restart the streaming service."""
     try:
+        config, _ = parse_config()
+        if not is_config_ready(config):
+            return jsonify({'success': False, 'error': 'Спочатку заповніть RTMP URL у налаштуваннях і збережіть конфігурацію'}), 400
+
         result = os.system('sudo systemctl restart forpost-stream')
         if result == 0:
             return jsonify({'success': True, 'message': 'Stream restarted successfully'})

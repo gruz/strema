@@ -38,6 +38,12 @@ fi
 # Build RTSP URL
 RTSP_URL="rtsp://${FORPOST_IP}:${RTSP_PORT}/${VIDEO_DEVICE}"
 
+# Validate required settings
+if [ -z "${RTMP_URL}" ] || [[ "${RTMP_URL}" == *"__RTMP_URL__"* ]]; then
+    echo "Error: RTMP_URL is not configured. Open the web interface and set RTMP URL, then restart the service."
+    exit 1
+fi
+
 echo "=========================================="
 echo "Starting video stream"
 echo "=========================================="

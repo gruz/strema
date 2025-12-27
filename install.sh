@@ -43,17 +43,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
     echo ""
     echo "Creating new configuration file..."
     echo ""
-    
-    # RTMP URL
-    read -p "RTMP URL (e.g. rtmps://server:port/app/key): " rtmp_url
-    if [ -z "$rtmp_url" ]; then
-        echo "Error: RTMP URL is required"
-        exit 1
-    fi
-    
-    # Overlay text
-    read -p "Overlay text (leave empty to disable): " overlay_text
-    
+
     # Generate config from template
     if [ ! -f "$CONFIG_TEMPLATE" ]; then
         echo "Error: Configuration template not found: $CONFIG_TEMPLATE"
@@ -61,8 +51,11 @@ if [ ! -f "$CONFIG_FILE" ]; then
     fi
     
     cp "$CONFIG_TEMPLATE" "$CONFIG_FILE"
-    sed -i "s|__RTMP_URL__|$rtmp_url|g" "$CONFIG_FILE"
-    sed -i "s|__OVERLAY_TEXT__|$overlay_text|g" "$CONFIG_FILE"
+
+    # First-run setup happens in the web UI. Keep placeholders empty so the UI can
+    # require minimal user input (RTMP URL) on first visit.
+    sed -i "s|__RTMP_URL__||g" "$CONFIG_FILE"
+    sed -i "s|__OVERLAY_TEXT__||g" "$CONFIG_FILE"
     
     # Make config accessible to user
     chown ${SUDO_USER:-$USER}:${SUDO_USER:-$USER} "$CONFIG_FILE"

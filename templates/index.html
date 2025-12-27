@@ -542,6 +542,7 @@
             const originalText = btn.textContent;
             btn.textContent = '⏳ Перезапуск...';
 
+
             fetch('/api/stream/restart', {
                 method: 'POST'
             })
