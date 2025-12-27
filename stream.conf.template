@@ -18,8 +18,8 @@ RTMP_URL=__RTMP_URL__
 OVERLAY_FONTSIZE=16
 
 # Overlay transparency (0.0 = transparent, 1.0 = opaque)
-OVERLAY_BG_OPACITY=0.5
-OVERLAY_TEXT_OPACITY=1.0
+OVERLAY_BG_OPACITY=0.2
+OVERLAY_TEXT_OPACITY=0.7
 
 # Video quality (higher value = lower quality, less CPU load)
 # Recommended: 28-32 for low CPU, 23-27 for better quality
