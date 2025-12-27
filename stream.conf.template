@@ -39,7 +39,7 @@ OVERLAY_POSITION=top-left
 SHOW_FREQUENCY=true
 
 # Frequency display position (top-left, top-right, bottom-left, bottom-right)
-FREQUENCY_POSITION=bottom-left
+FREQUENCY_POSITION=top-right
 
 # Auto-restart stream periodically (true/false)
 # Helps prevent stream freezing or connection issues
