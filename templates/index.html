@@ -61,6 +61,11 @@
             color: #721c24;
         }
 
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
         .cpu-mode-badge {
             display: inline-block;
             padding: 6px 12px;
@@ -228,6 +233,7 @@
             <p>Конфігурація відеопотоку</p>
             <div>
                 <span id="statusBadge"></span>
+                <span id="operationBadge" class="status-badge status-pending" style="display:none;"></span>
                 <span id="cpuModeBadge" class="cpu-mode-badge"></span>
             </div>
         </div>
@@ -403,6 +409,87 @@
                 .catch(err => console.error('Failed to fetch status:', err));
         }
 
+        function setOperationBadge(text) {
+            const b = document.getElementById('operationBadge');
+            if (!b) return;
+            b.style.display = 'inline-block';
+            b.textContent = text;
+        }
+
+        function clearOperationBadge() {
+            const b = document.getElementById('operationBadge');
+            if (!b) return;
+            b.style.display = 'none';
+            b.textContent = '';
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function waitForDesiredActiveState(desiredActive, timeoutMs) {
+            const startTs = Date.now();
+            return new Promise((resolve, reject) => {
+                const tick = () => {
+                    fetch('/api/status')
+                        .then(r => r.json())
+                        .then(s => {
+                            if ((s.active || false) === desiredActive) {
+                                resolve(s);
+                                return;
+                            }
+                            if (Date.now() - startTs >= timeoutMs) {
+                                reject(new Error('TIMEOUT'));
+                                return;
+                            }
+                            setTimeout(tick, 1000);
+                        })
+                        .catch(() => {
+                            if (Date.now() - startTs >= timeoutMs) {
+                                reject(new Error('TIMEOUT'));
+                                return;
+                            }
+                            setTimeout(tick, 1000);
+                        });
+                };
+                tick();
+            });
+        }
+
+        function waitForRestart(timeoutMs) {
+            const startTs = Date.now();
+            let sawNonActive = false;
+            return new Promise((resolve, reject) => {
+                const tick = () => {
+                    fetch('/api/status')
+                        .then(r => r.json())
+                        .then(s => {
+                            const status = (s.status || '').trim();
+                            if (status && status !== 'active') {
+                                sawNonActive = true;
+                            }
+                            if (sawNonActive && status === 'active') {
+                                resolve(s);
+                                return;
+                            }
+                            if (Date.now() - startTs >= timeoutMs) {
+                                reject(new Error('TIMEOUT'));
+                                return;
+                            }
+                            setTimeout(tick, 1000);
+                        })
+                        .catch(() => {
+                            if (Date.now() - startTs >= timeoutMs) {
+                                reject(new Error('TIMEOUT'));
+                                return;
+                            }
+                            setTimeout(tick, 1000);
+                        });
+                };
+                tick();
+            });
+        }
+
         function updateCpuModeBadge(config) {
             const badge = document.getElementById('cpuModeBadge');
             const hasOverlay = config.OVERLAY_TEXT && config.OVERLAY_TEXT.trim() !== '';
@@ -451,21 +538,43 @@
             saveBtn.disabled = true;
             saveBtn.textContent = '⏳ Збереження...';
 
-            fetch('/api/config', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(config)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('✅ ' + data.message, 'success');
-                    loadConfig();
-                } else {
-                    showAlert('❌ ' + data.error, 'error');
-                }
+            fetch('/api/status')
+            .then(r => r.json())
+            .then(statusBefore => {
+                const wasActive = statusBefore.active || false;
+
+                return fetch('/api/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(config)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('✅ ' + data.message, 'success');
+                        loadConfig();
+
+                        if (wasActive) {
+                            setOperationBadge('⏳ Перезапуск…');
+                            const minVisibleMs = 1500;
+                            const startedAt = Date.now();
+                            return waitForRestart(25000)
+                                .catch(() => null)
+                                .then(() => updateStatus())
+                                .finally(() => {
+                                    const elapsed = Date.now() - startedAt;
+                                    const remaining = Math.max(0, minVisibleMs - elapsed);
+                                    setTimeout(() => {
+                                        clearOperationBadge();
+                                    }, remaining);
+                                });
+                        }
+                    } else {
+                        showAlert('❌ ' + data.error, 'error');
+                    }
+                });
             })
             .catch(err => {
                 showAlert('❌ Помилка: ' + err.message, 'error');
@@ -482,6 +591,7 @@
             btn.disabled = true;
             const originalText = btn.textContent;
             btn.textContent = '⏳ Запуск...';
+            setOperationBadge('⏳ Запуск…');
 
             fetch('/api/stream/start', {
                 method: 'POST'
@@ -490,13 +600,23 @@
             .then(data => {
                 if (data.success) {
                     showAlert('✅ ' + data.message, 'success');
-                    setTimeout(updateStatus, 1000);
+                    return waitForDesiredActiveState(true, 20000)
+                        .then(() => {
+                            clearOperationBadge();
+                            updateStatus();
+                        })
+                        .catch(() => {
+                            clearOperationBadge();
+                            updateStatus();
+                        });
                 } else {
                     showAlert('❌ ' + data.error, 'error');
+                    clearOperationBadge();
                 }
             })
             .catch(err => {
                 showAlert('❌ Помилка: ' + err.message, 'error');
+                clearOperationBadge();
             })
             .finally(() => {
                 btn.disabled = false;
@@ -514,6 +634,7 @@
             btn.disabled = true;
             const originalText = btn.textContent;
             btn.textContent = '⏳ Зупинка...';
+            setOperationBadge('⏳ Зупинка…');
 
             fetch('/api/stream/stop', {
                 method: 'POST'
@@ -522,13 +643,23 @@
             .then(data => {
                 if (data.success) {
                     showAlert('✅ ' + data.message, 'success');
-                    setTimeout(updateStatus, 1000);
+                    return waitForDesiredActiveState(false, 20000)
+                        .then(() => {
+                            clearOperationBadge();
+                            updateStatus();
+                        })
+                        .catch(() => {
+                            clearOperationBadge();
+                            updateStatus();
+                        });
                 } else {
                     showAlert('❌ ' + data.error, 'error');
+                    clearOperationBadge();
                 }
             })
             .catch(err => {
                 showAlert('❌ Помилка: ' + err.message, 'error');
+                clearOperationBadge();
             })
             .finally(() => {
                 btn.disabled = false;
@@ -546,6 +677,7 @@
             btn.disabled = true;
             const originalText = btn.textContent;
             btn.textContent = '⏳ Перезапуск...';
+            setOperationBadge('⏳ Перезапуск…');
 
 
             fetch('/api/stream/restart', {
@@ -555,13 +687,23 @@
             .then(data => {
                 if (data.success) {
                     showAlert('✅ ' + data.message, 'success');
-                    setTimeout(updateStatus, 2000);
+                    return waitForDesiredActiveState(true, 25000)
+                        .then(() => {
+                            clearOperationBadge();
+                            updateStatus();
+                        })
+                        .catch(() => {
+                            clearOperationBadge();
+                            updateStatus();
+                        });
                 } else {
                     showAlert('❌ ' + data.error, 'error');
+                    clearOperationBadge();
                 }
             })
             .catch(err => {
                 showAlert('❌ Помилка: ' + err.message, 'error');
+                clearOperationBadge();
             })
             .finally(() => {
                 btn.disabled = false;
