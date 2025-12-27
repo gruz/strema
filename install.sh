@@ -29,39 +29,7 @@ apt-get install -y ffmpeg strace python3-flask
 echo ""
 echo "[2/6] Configuring..."
 
-if [ -f "$CONFIG_FILE" ]; then
-    echo "Configuration file already exists: $CONFIG_FILE"
-    read -p "Overwrite? (y/N): " overwrite
-    if [ "$overwrite" != "y" ] && [ "$overwrite" != "Y" ]; then
-        echo "Using existing config."
-    else
-        rm -f "$CONFIG_FILE"
-    fi
-fi
-
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo ""
-    echo "Creating new configuration file..."
-    echo ""
-
-    # Generate config from template
-    if [ ! -f "$CONFIG_TEMPLATE" ]; then
-        echo "Error: Configuration template not found: $CONFIG_TEMPLATE"
-        exit 1
-    fi
-    
-    cp "$CONFIG_TEMPLATE" "$CONFIG_FILE"
-
-    # First-run setup happens in the web UI. Keep placeholders empty so the UI can
-    # require minimal user input (RTMP URL) on first visit.
-    sed -i "s|__RTMP_URL__||g" "$CONFIG_FILE"
-    sed -i "s|__OVERLAY_TEXT__||g" "$CONFIG_FILE"
-    
-    # Make config accessible to user
-    chown ${SUDO_USER:-$USER}:${SUDO_USER:-$USER} "$CONFIG_FILE"
-    
-    echo "Configuration created: $CONFIG_FILE"
-fi
+echo "Configuration will be created on first visit in the web UI."
 
 # Check required files
 echo ""
@@ -70,7 +38,7 @@ REQUIRED_FILES=(
     "$SCRIPT_DIR/start_stream.sh"
     "$SCRIPT_DIR/get_frequency.sh"
     "$SCRIPT_DIR/update_frequency.sh"
-    "$CONFIG_FILE"
+    "$CONFIG_TEMPLATE"
     "$SERVICE_FILE"
     "$SCRIPT_DIR/web_config.py"
     "$SCRIPT_DIR/templates/index.html"
@@ -138,5 +106,5 @@ echo "  Web UI:   sudo systemctl status forpost-stream-web"
 echo "  Stream:   sudo systemctl status $SERVICE_NAME"
 echo "  Logs:     sudo journalctl -u $SERVICE_NAME -f"
 echo ""
-echo "Configuration: $SCRIPT_DIR/stream.conf"
+echo "Configuration will be created in the web UI: $SCRIPT_DIR/stream.conf"
 echo ""
