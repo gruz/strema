@@ -15,6 +15,14 @@ fi
 # Load configuration
 source "$CONFIG_FILE"
 
+# FFmpeg logging level (quiet, panic, fatal, error, warning, info, verbose, debug, trace)
+FFMPEG_LOGLEVEL=${FFMPEG_LOGLEVEL:-info}
+
+RTSP_TRANSPORT=${RTSP_TRANSPORT:-tcp}
+FFMPEG_ANALYZEDURATION=${FFMPEG_ANALYZEDURATION:-200000}
+FFMPEG_PROBESIZE=${FFMPEG_PROBESIZE:-32768}
+FFMPEG_FFLAGS=${FFMPEG_FFLAGS:-+genpts+nobuffer}
+
 # Auto-detect IP address if not set in config
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
     FORPOST_IP=$(ip route get 1 | awk '{print $7; exit}')
@@ -132,7 +140,8 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
     while true; do
         echo "[$(date '+%H:%M:%S')] Connecting to stream..."
         
-        ffmpeg -rtsp_transport tcp -fflags +genpts -analyzeduration 2000000 -probesize 5000000 \
+        ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5 \
+            -rtsp_transport "$RTSP_TRANSPORT" -fflags "$FFMPEG_FFLAGS" -flags low_delay -analyzeduration "$FFMPEG_ANALYZEDURATION" -probesize "$FFMPEG_PROBESIZE" \
             -i "$RTSP_URL" \
             -vf "$VF_FILTER" \
             -c:v libx264 -preset ultrafast -tune zerolatency -crf ${VIDEO_CRF} -g 60 -sc_threshold 0 -threads 2 \
@@ -153,7 +162,8 @@ else
         echo "[$(date '+%H:%M:%S')] Connecting to stream..."
         
         # No overlay - just copy video without re-encoding
-        ffmpeg -rtsp_transport tcp -fflags +genpts -analyzeduration 2000000 -probesize 5000000 \
+        ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5 \
+            -rtsp_transport "$RTSP_TRANSPORT" -fflags "$FFMPEG_FFLAGS" -flags low_delay -analyzeduration "$FFMPEG_ANALYZEDURATION" -probesize "$FFMPEG_PROBESIZE" \
             -i "$RTSP_URL" \
             -c:v copy \
             -an \
