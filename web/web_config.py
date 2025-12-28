@@ -277,7 +277,7 @@ def set_autorestart():
             return jsonify({'success': False, 'error': message}), 500
         
         # Apply timer settings
-        script_path = SCRIPT_DIR / 'update_autorestart.sh'
+        script_path = PROJECT_ROOT / 'scripts' / 'update_autorestart.sh'
         result = os.system(f'sudo bash {script_path}')
         if result == 0:
             return jsonify({'success': True, 'message': 'Auto-restart settings updated'})

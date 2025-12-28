@@ -24,7 +24,8 @@ set -euo pipefail
 # - RTSP_URL: fully override RTSP URL
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="$SCRIPT_DIR/stream.conf"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONFIG_FILE="$PROJECT_ROOT/config/stream.conf"
 
 DURATION_SEC="${DURATION_SEC:-600}"
 LOG_FILE="/tmp/gst_rtsp_probe.log"
