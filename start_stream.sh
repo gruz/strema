@@ -5,10 +5,26 @@
 # Determine script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/stream.conf"
+LOG_FILE="$SCRIPT_DIR/stream.log"
+MAX_LOG_SIZE=10485760  # 10MB
+
+# Rotate log if too large
+if [ -f "$LOG_FILE" ] && [ $(stat -f%z "$LOG_FILE" 2>/dev/null || stat -c%s "$LOG_FILE" 2>/dev/null) -gt $MAX_LOG_SIZE ]; then
+    # Keep only last 10MB, remove old backup
+    rm -f "$LOG_FILE.old"
+    mv "$LOG_FILE" "$LOG_FILE.old"
+    # Truncate old file to last 5MB to save space
+    tail -c 5242880 "$LOG_FILE.old" > "$LOG_FILE.old.tmp" 2>/dev/null && mv "$LOG_FILE.old.tmp" "$LOG_FILE.old"
+fi
+
+# Logging function
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
 
 # Check for configuration file
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Error: Configuration file not found: $CONFIG_FILE"
+    log "ERROR: Configuration file not found: $CONFIG_FILE"
     exit 1
 fi
 
@@ -26,12 +42,12 @@ FFMPEG_FFLAGS=${FFMPEG_FFLAGS:-+genpts+nobuffer}
 # Auto-detect IP address if not set in config
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
     FORPOST_IP=$(ip route get 1 | awk '{print $7; exit}')
-    echo "Auto-detected IP: $FORPOST_IP"
+    log "Auto-detected IP: $FORPOST_IP"
 fi
 
 # Check for ffmpeg
 if ! command -v ffmpeg &> /dev/null; then
-    echo "Error: ffmpeg is not installed"
+    log "ERROR: ffmpeg is not installed"
     exit 1
 fi
 
@@ -40,17 +56,16 @@ RTSP_URL="rtsp://${FORPOST_IP}:${RTSP_PORT}/${VIDEO_DEVICE}"
 
 # Validate required settings
 if [ -z "${RTMP_URL}" ] || [[ "${RTMP_URL}" == *"__RTMP_URL__"* ]]; then
-    echo "Error: RTMP_URL is not configured. Open the web interface and set RTMP URL, then restart the service."
+    log "ERROR: RTMP_URL is not configured. Open the web interface and set RTMP URL, then restart the service."
     exit 1
 fi
 
-echo "=========================================="
-echo "Starting video stream"
-echo "=========================================="
-echo "RTSP source: $RTSP_URL"
-echo "RTMP: ${RTMP_URL%/*}/***"
-echo "=========================================="
-echo ""
+log "=========================================="
+log "Starting video stream"
+log "=========================================="
+log "RTSP source: $RTSP_URL"
+log "RTMP: ${RTMP_URL%/*}/***"
+log "=========================================="
 
 # File for dynamic frequency
 FREQ_FILE="/tmp/dzyga_freq.txt"
@@ -104,14 +119,14 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
     
     # Static overlay text
     if [ -n "$OVERLAY_TEXT" ]; then
-        echo "Overlay text: $OVERLAY_TEXT (position: $OVERLAY_POSITION)"
+        log "Overlay text: $OVERLAY_TEXT (position: $OVERLAY_POSITION)"
         OVERLAY_COORDS=$(get_position_coords "$OVERLAY_POSITION")
         VF_FILTER="drawtext=text='${OVERLAY_TEXT}':fontsize=${OVERLAY_FONTSIZE}:fontcolor=white@${OVERLAY_TEXT_OPACITY}:box=1:boxcolor=black@${OVERLAY_BG_OPACITY}:boxborderw=5:x=${OVERLAY_COORDS%:*}:y=${OVERLAY_COORDS#*:}"
     fi
     
     # Dynamic frequency
     if [ "$SHOW_FREQUENCY" = "true" ]; then
-        echo "Frequency: enabled (updates every 2 sec, position: $FREQUENCY_POSITION)"
+        log "Frequency: enabled (updates every 2 sec, position: $FREQUENCY_POSITION)"
         
         # Start frequency updater in background
         if [ -x "$FREQ_UPDATER" ]; then
@@ -121,9 +136,9 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
             "$FREQ_UPDATER" &
             FREQ_PID=$!
             trap "kill $FREQ_PID 2>/dev/null" EXIT
-            echo "Started frequency updater (PID: $FREQ_PID)"
+            log "Started frequency updater (PID: $FREQ_PID)"
         else
-            echo "WARNING: Frequency update script not found: $FREQ_UPDATER"
+            log "WARNING: Frequency update script not found: $FREQ_UPDATER"
         fi
         
         # Add frequency filter
@@ -137,14 +152,14 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
         fi
     fi
     
-    echo "Using optimized software encoding (libx264)"
-    echo "Parameters: CRF=${VIDEO_CRF}, font size=${OVERLAY_FONTSIZE}"
+    log "Using optimized software encoding (libx264)"
+    log "Parameters: CRF=${VIDEO_CRF}, font size=${OVERLAY_FONTSIZE}"
     
     # Auto-reconnect loop (watchdog service handles service restarts)
     RECONNECT_DELAY=5
     
     while true; do
-        echo "[$(date '+%H:%M:%S')] Connecting to stream..."
+        log "Connecting to stream..."
         
         ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5 \
             -rtsp_transport "$RTSP_TRANSPORT" -fflags "$FFMPEG_FFLAGS" -flags low_delay -analyzeduration "$FFMPEG_ANALYZEDURATION" -probesize "$FFMPEG_PROBESIZE" \
@@ -155,17 +170,17 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
             -f flv \
             "$RTMP_URL"
         
-        echo "[$(date '+%H:%M:%S')] Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
+        log "Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
         sleep $RECONNECT_DELAY
     done
 else
-    echo "Overlay disabled - using stream copy"
+    log "Overlay disabled - using stream copy"
     
     # Auto-reconnect loop (watchdog service handles service restarts)
     RECONNECT_DELAY=5
     
     while true; do
-        echo "[$(date '+%H:%M:%S')] Connecting to stream..."
+        log "Connecting to stream..."
         
         # No overlay - just copy video without re-encoding
         ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5 \
@@ -176,7 +191,7 @@ else
             -f flv \
             "$RTMP_URL"
         
-        echo "[$(date '+%H:%M:%S')] Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
+        log "Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
         sleep $RECONNECT_DELAY
     done
 fi

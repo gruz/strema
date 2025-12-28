@@ -1,0 +1,14 @@
+[Unit]
+Description=Forpost Stream Log Cleanup
+After=forpost-stream.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=__INSTALL_DIR__
+ExecStart=__INSTALL_DIR__/cleanup_logs.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

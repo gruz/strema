@@ -84,11 +84,40 @@ sudo systemctl restart forpost-stream
 | `AUTO_RESTART_ENABLED` | Автоперезапуск трансляції | `true` / `false` |
 | `AUTO_RESTART_INTERVAL` | Період перезапуску (години) | `2` |
 
-## Логи
+## Моніторинг та Логи
+
+### Watchdog (автоматичний моніторинг)
+
+Система автоматично перевіряє стан трансляції кожні 2 хвилини:
+- Виявляє зависання з'єднання (CLOSE-WAIT стан)
+- Перевіряє активність процесу ffmpeg
+- Автоматично перезапускає сервіс при виявленні проблем
 
 ```bash
-sudo journalctl -u forpost-stream -f
+# Статус watchdog
+sudo systemctl status forpost-stream-watchdog.timer
+
+# Логи watchdog
+tail -f watchdog.log
 ```
+
+### Логи трансляції
+
+```bash
+# Системні логи (journalctl)
+sudo journalctl -u forpost-stream -f
+
+# Лог файл трансляції (в теці проекту)
+tail -f stream.log
+
+# Лог файл watchdog (в теці проекту)
+tail -f watchdog.log
+```
+
+**Примітка:** Лог-файли автоматично ротуються:
+- При досягненні 10MB створюється `.old` файл (обрізається до 5MB)
+- Щодня видаляються `.old` файли старші 7 днів
+- Максимальний розмір всіх логів: **50MB** (гарантовано не переповнить диск)
 
 ## Видалення
 
