@@ -39,7 +39,6 @@ REQUIRED_FILES=(
     "$SCRIPT_DIR/scripts/get_frequency.sh"
     "$SCRIPT_DIR/scripts/update_frequency.sh"
     "$SCRIPT_DIR/scripts/watchdog.sh"
-    "$SCRIPT_DIR/scripts/cleanup_logs.sh"
     "$CONFIG_TEMPLATE"
     "$SERVICE_FILE"
     "$SCRIPT_DIR/web/web_config.py"
@@ -49,8 +48,6 @@ REQUIRED_FILES=(
     "$SCRIPT_DIR/systemd/forpost-stream-autorestart.service"
     "$SCRIPT_DIR/systemd/forpost-stream-watchdog.timer"
     "$SCRIPT_DIR/systemd/forpost-stream-watchdog.service"
-    "$SCRIPT_DIR/systemd/forpost-stream-cleanup.timer"
-    "$SCRIPT_DIR/systemd/forpost-stream-cleanup.service"
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
@@ -77,12 +74,10 @@ sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream.servic
 sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-config.path" > /etc/systemd/system/forpost-stream-config.path
 sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-web.service" > /etc/systemd/system/forpost-stream-web.service
 sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-watchdog.service" > /etc/systemd/system/forpost-stream-watchdog.service
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-cleanup.service" > /etc/systemd/system/forpost-stream-cleanup.service
 cp "$SCRIPT_DIR/systemd/forpost-stream-restart.service" /etc/systemd/system/
 cp "$SCRIPT_DIR/systemd/forpost-stream-autorestart.timer" /etc/systemd/system/
 cp "$SCRIPT_DIR/systemd/forpost-stream-autorestart.service" /etc/systemd/system/
 cp "$SCRIPT_DIR/systemd/forpost-stream-watchdog.timer" /etc/systemd/system/
-cp "$SCRIPT_DIR/systemd/forpost-stream-cleanup.timer" /etc/systemd/system/
 systemctl daemon-reload
 
 # Enable and start services
@@ -100,9 +95,6 @@ systemctl start forpost-stream-web
 # Enable watchdog timer
 systemctl enable forpost-stream-watchdog.timer
 systemctl start forpost-stream-watchdog.timer
-# Enable log cleanup timer (runs daily)
-systemctl enable forpost-stream-cleanup.timer
-systemctl start forpost-stream-cleanup.timer
 
 echo ""
 echo "=========================================="
