@@ -29,7 +29,7 @@ parse_byte() {
 }
 
 # Sniff via strace fd=4 (ttyACM0)
-sudo timeout 5 strace -f -p "$DZYGA_PID" -e read -s 256 -x 2>&1 | \
+timeout 5 strace -f -p "$DZYGA_PID" -e read -s 256 -x 2>&1 | \
 grep -m1 -A2 'read(4, "\\xff", 1)' | \
 {
     read -r line1
