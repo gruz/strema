@@ -25,6 +25,11 @@ OVERLAY_TEXT_OPACITY=0.7
 # Recommended: 28-32 for low CPU, 23-27 for better quality
 VIDEO_CRF=28
 
+# Video frame rate (frames per second)
+# Lower FPS = less bandwidth, better stability
+# Recommended: 15 for low bandwidth, 25 for smooth video
+VIDEO_FPS=15
+
 # Text to display on video
 # Leave empty to disable overlay
 # WARNING: Overlay significantly increases CPU usage! Use carefully.
