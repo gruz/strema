@@ -36,9 +36,6 @@ source "$CONFIG_FILE"
 FFMPEG_LOGLEVEL=${FFMPEG_LOGLEVEL:-info}
 
 RTSP_TRANSPORT=${RTSP_TRANSPORT:-tcp}
-FFMPEG_ANALYZEDURATION=${FFMPEG_ANALYZEDURATION:-200000}
-FFMPEG_PROBESIZE=${FFMPEG_PROBESIZE:-32768}
-FFMPEG_FFLAGS=${FFMPEG_FFLAGS:-+genpts+nobuffer}
 
 # Auto-detect IP address if not set in config
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
@@ -163,7 +160,7 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
         log "Connecting to stream..."
         
         ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5 \
-            -rtsp_transport "$RTSP_TRANSPORT" -fflags "$FFMPEG_FFLAGS" -flags low_delay -analyzeduration "$FFMPEG_ANALYZEDURATION" -probesize "$FFMPEG_PROBESIZE" \
+            -rtsp_transport "$RTSP_TRANSPORT" \
             -i "$RTSP_URL" \
             -vf "$VF_FILTER" \
             -c:v libx264 -preset ultrafast -tune zerolatency -crf ${VIDEO_CRF} -g 60 -sc_threshold 0 -threads 2 \
@@ -185,7 +182,7 @@ else
         
         # No overlay - just copy video without re-encoding
         ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5 \
-            -rtsp_transport "$RTSP_TRANSPORT" -fflags "$FFMPEG_FFLAGS" -flags low_delay -analyzeduration "$FFMPEG_ANALYZEDURATION" -probesize "$FFMPEG_PROBESIZE" \
+            -rtsp_transport "$RTSP_TRANSPORT" \
             -i "$RTSP_URL" \
             -c:v copy \
             -an \
