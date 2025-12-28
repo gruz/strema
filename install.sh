@@ -6,9 +6,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_NAME="forpost-stream"
-SERVICE_FILE="$SCRIPT_DIR/forpost-stream.service"
-CONFIG_FILE="$SCRIPT_DIR/stream.conf"
-CONFIG_TEMPLATE="$SCRIPT_DIR/stream.conf.template"
+SERVICE_FILE="$SCRIPT_DIR/systemd/forpost-stream.service"
+CONFIG_FILE="$SCRIPT_DIR/config/stream.conf"
+CONFIG_TEMPLATE="$SCRIPT_DIR/config/stream.conf.template"
 
 echo "=========================================="
 echo "Installing Forpost Stream"
@@ -35,22 +35,22 @@ echo "Configuration will be created on first visit in the web UI."
 echo ""
 echo "[3/7] Checking files..."
 REQUIRED_FILES=(
-    "$SCRIPT_DIR/start_stream.sh"
-    "$SCRIPT_DIR/get_frequency.sh"
-    "$SCRIPT_DIR/update_frequency.sh"
-    "$SCRIPT_DIR/watchdog.sh"
-    "$SCRIPT_DIR/cleanup_logs.sh"
+    "$SCRIPT_DIR/scripts/start_stream.sh"
+    "$SCRIPT_DIR/scripts/get_frequency.sh"
+    "$SCRIPT_DIR/scripts/update_frequency.sh"
+    "$SCRIPT_DIR/scripts/watchdog.sh"
+    "$SCRIPT_DIR/scripts/cleanup_logs.sh"
     "$CONFIG_TEMPLATE"
     "$SERVICE_FILE"
-    "$SCRIPT_DIR/web_config.py"
-    "$SCRIPT_DIR/templates/index.html"
-    "$SCRIPT_DIR/update_autorestart.sh"
-    "$SCRIPT_DIR/forpost-stream-autorestart.timer"
-    "$SCRIPT_DIR/forpost-stream-autorestart.service"
-    "$SCRIPT_DIR/forpost-stream-watchdog.timer"
-    "$SCRIPT_DIR/forpost-stream-watchdog.service"
-    "$SCRIPT_DIR/forpost-stream-cleanup.timer"
-    "$SCRIPT_DIR/forpost-stream-cleanup.service"
+    "$SCRIPT_DIR/web/web_config.py"
+    "$SCRIPT_DIR/web/templates/index.html"
+    "$SCRIPT_DIR/scripts/update_autorestart.sh"
+    "$SCRIPT_DIR/systemd/forpost-stream-autorestart.timer"
+    "$SCRIPT_DIR/systemd/forpost-stream-autorestart.service"
+    "$SCRIPT_DIR/systemd/forpost-stream-watchdog.timer"
+    "$SCRIPT_DIR/systemd/forpost-stream-watchdog.service"
+    "$SCRIPT_DIR/systemd/forpost-stream-cleanup.timer"
+    "$SCRIPT_DIR/systemd/forpost-stream-cleanup.service"
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
@@ -61,13 +61,11 @@ for file in "${REQUIRED_FILES[@]}"; do
 done
 
 # Set execute permissions
-chmod +x "$SCRIPT_DIR/start_stream.sh"
-chmod +x "$SCRIPT_DIR/get_frequency.sh"
-chmod +x "$SCRIPT_DIR/update_frequency.sh"
-chmod +x "$SCRIPT_DIR/watchdog.sh"
-chmod +x "$SCRIPT_DIR/cleanup_logs.sh"
-chmod +x "$SCRIPT_DIR/web_config.py"
-chmod +x "$SCRIPT_DIR/update_autorestart.sh"
+chmod +x "$SCRIPT_DIR/scripts/"*.sh
+chmod +x "$SCRIPT_DIR/web/web_config.py"
+
+# Create logs directory if it doesn't exist
+mkdir -p "$SCRIPT_DIR/logs"
 
 echo "All files in place."
 
@@ -75,16 +73,16 @@ echo "All files in place."
 echo ""
 echo "[4/7] Installing systemd services..."
 # Replace __INSTALL_DIR__ placeholder with actual script directory
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SERVICE_FILE" > /etc/systemd/system/forpost-stream.service
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/forpost-stream-config.path" > /etc/systemd/system/forpost-stream-config.path
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/forpost-stream-web.service" > /etc/systemd/system/forpost-stream-web.service
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/forpost-stream-watchdog.service" > /etc/systemd/system/forpost-stream-watchdog.service
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/forpost-stream-cleanup.service" > /etc/systemd/system/forpost-stream-cleanup.service
-cp "$SCRIPT_DIR/forpost-stream-restart.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/forpost-stream-autorestart.timer" /etc/systemd/system/
-cp "$SCRIPT_DIR/forpost-stream-autorestart.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/forpost-stream-watchdog.timer" /etc/systemd/system/
-cp "$SCRIPT_DIR/forpost-stream-cleanup.timer" /etc/systemd/system/
+sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream.service" > /etc/systemd/system/forpost-stream.service
+sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-config.path" > /etc/systemd/system/forpost-stream-config.path
+sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-web.service" > /etc/systemd/system/forpost-stream-web.service
+sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-watchdog.service" > /etc/systemd/system/forpost-stream-watchdog.service
+sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-cleanup.service" > /etc/systemd/system/forpost-stream-cleanup.service
+cp "$SCRIPT_DIR/systemd/forpost-stream-restart.service" /etc/systemd/system/
+cp "$SCRIPT_DIR/systemd/forpost-stream-autorestart.timer" /etc/systemd/system/
+cp "$SCRIPT_DIR/systemd/forpost-stream-autorestart.service" /etc/systemd/system/
+cp "$SCRIPT_DIR/systemd/forpost-stream-watchdog.timer" /etc/systemd/system/
+cp "$SCRIPT_DIR/systemd/forpost-stream-cleanup.timer" /etc/systemd/system/
 systemctl daemon-reload
 
 # Enable and start services
@@ -131,9 +129,9 @@ echo "  Web UI:     sudo systemctl status forpost-stream-web"
 echo "  Stream:     sudo systemctl status $SERVICE_NAME"
 echo "  Watchdog:   sudo systemctl status forpost-stream-watchdog.timer"
 echo "  Logs:       sudo journalctl -u $SERVICE_NAME -f"
-echo "  Stream log: tail -f $SCRIPT_DIR/stream.log"
-echo "  Watchdog:   tail -f $SCRIPT_DIR/watchdog.log"
+echo "  Stream log: tail -f $SCRIPT_DIR/logs/stream.log"
+echo "  Watchdog:   tail -f $SCRIPT_DIR/logs/watchdog.log"
 echo ""
 echo "[7/7] Watchdog enabled - monitors stream health every 2 minutes"
-echo "Configuration will be created in the web UI: $SCRIPT_DIR/stream.conf"
+echo "Configuration will be created in the web UI: $SCRIPT_DIR/config/stream.conf"
 echo ""

@@ -1,0 +1,7 @@
+[Unit]
+Description=FORPOST Stream Auto-Restart Service
+Requires=forpost-stream.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart forpost-stream.service

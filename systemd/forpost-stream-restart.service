@@ -1,0 +1,6 @@
+[Unit]
+Description=Restart Forpost Stream on config change
+
+[Service]
+Type=oneshot
+ExecStart=/bin/systemctl restart forpost-stream.service

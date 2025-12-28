@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FORPOST Stream - Інсталяція</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group .help-text {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>FORPOST Stream</h1>
+            <p>Перший запуск — введіть мінімально необхідні налаштування</p>
+        </div>
+
+        <div id="alertBox" class="alert"></div>
+
+        <div class="card">
+            <div class="section-title">Налаштування трансляції</div>
+
+            <form id="installerForm">
+                <div class="form-group">
+                    <label for="RTMP_URL">RTMP URL</label>
+                    <span class="help-text">Обов'язково. Повний URL (напр. rtmps://server:port/app/key)</span>
+                    <input type="text" id="RTMP_URL" required placeholder="rtmps://server:port/app/key" value="{{ (config.get('RTMP_URL') or '') if (config.get('RTMP_URL') and '__RTMP_URL__' not in config.get('RTMP_URL')) else '' }}">
+                </div>
+
+                <div class="form-group">
+                    <label for="OVERLAY_TEXT">Текст оверлею (опційно)</label>
+                    <span class="help-text">Залиште пустим, щоб оверлей був вимкнений</span>
+                    <input type="text" id="OVERLAY_TEXT" placeholder="Напр. [ДЗИГА]" value="{{ (config.get('OVERLAY_TEXT') or '') if (config.get('OVERLAY_TEXT') and '__OVERLAY_TEXT__' not in config.get('OVERLAY_TEXT')) else '' }}">
+                </div>
+
+                <button type="submit" class="btn" id="saveBtn">Зберегти</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.textContent = message;
+            alertBox.className = `alert alert-${type} show`;
+            setTimeout(() => {
+                alertBox.classList.remove('show');
+            }, 5000);
+        }
+
+        document.getElementById('installerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const rtmp = (document.getElementById('RTMP_URL').value || '').trim();
+            const overlay = (document.getElementById('OVERLAY_TEXT').value || '').trim();
+
+            if (!rtmp) {
+                showAlert('RTMP URL обов\'язковий', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('saveBtn');
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = 'Збереження...';
+
+            fetch('/api/installer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ RTMP_URL: rtmp, OVERLAY_TEXT: overlay })
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, data })))
+            .then(({ ok, data }) => {
+                if (!ok || !data.success) {
+                    showAlert(data.error || 'Помилка збереження', 'error');
+                    return;
+                }
+
+                showAlert('Налаштування збережено', 'success');
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 400);
+            })
+            .catch(err => {
+                showAlert('Помилка: ' + err.message, 'error');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            });
+        });
+
+        const rtmpInput = document.getElementById('RTMP_URL');
+        if (rtmpInput && !rtmpInput.value) {
+            rtmpInput.focus();
+        }
+    </script>
+</body>
+</html>

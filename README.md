@@ -2,6 +2,40 @@
 
 Трансляція відео з пристрою DZYGA на RTMP сервер з динамічним оверлеєм частоти.
 
+## 📁 Структура проекту
+
+```
+strema/
+├── README.md              # Документація
+├── install.sh             # Скрипт встановлення
+├── uninstall.sh           # Скрипт видалення
+├── requirements.txt       # Python залежності
+│
+├── scripts/               # Виконувані скрипти
+│   ├── start_stream.sh    # Головний скрипт трансляції
+│   ├── watchdog.sh        # Моніторинг здоров'я сервісу
+│   ├── cleanup_logs.sh    # Очищення логів
+│   ├── get_frequency.sh   # Отримання частоти
+│   └── update_*.sh        # Допоміжні скрипти
+│
+├── systemd/               # Systemd unit файли
+│   ├── forpost-stream.service
+│   ├── forpost-stream-watchdog.timer
+│   └── ...
+│
+├── config/                # Конфігураційні файли
+│   ├── stream.conf.template
+│   └── stream.conf        # (gitignored)
+│
+├── web/                   # Web інтерфейс
+│   ├── web_config.py
+│   └── templates/
+│
+└── logs/                  # Лог файли (gitignored)
+    ├── stream.log
+    └── watchdog.log
+```
+
 ## Встановлення
 
 ```bash
@@ -107,11 +141,11 @@ tail -f watchdog.log
 # Системні логи (journalctl)
 sudo journalctl -u forpost-stream -f
 
-# Лог файл трансляції (в теці проекту)
-tail -f stream.log
+# Лог файл трансляції
+tail -f logs/stream.log
 
-# Лог файл watchdog (в теці проекту)
-tail -f watchdog.log
+# Лог файл watchdog
+tail -f logs/watchdog.log
 ```
 
 **Примітка:** Лог-файли автоматично ротуються:
