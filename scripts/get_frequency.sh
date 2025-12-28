@@ -22,6 +22,10 @@ parse_byte() {
         \\r) echo "0d" ;;
         \\n) echo "0a" ;;
         \\t) echo "09" ;;
+        \\f) echo "0c" ;;
+        \\v) echo "0b" ;;
+        \\b) echo "08" ;;
+        \\a) echo "07" ;;
         \\0) echo "00" ;;
         \\\\) echo "5c" ;;
         *) printf '%02x' "'$s" ;;
@@ -50,7 +54,7 @@ grep -m1 -A2 'read(4, "\\xff", 1)' | \
             if [[ "$content" =~ ^\\x([0-9a-fA-F]{2}) ]]; then
                 byte1="${BASH_REMATCH[1]}"
                 content="${content:4}"
-            elif [[ "$content" =~ ^\\([rnt0\\]) ]]; then
+            elif [[ "$content" =~ ^\\([rntfvba0\\]) ]]; then
                 byte1=$(parse_byte "\\${BASH_REMATCH[1]}")
                 content="${content:2}"
             elif [ -n "$content" ]; then
@@ -61,7 +65,7 @@ grep -m1 -A2 'read(4, "\\xff", 1)' | \
             # Second byte
             if [[ "$content" =~ ^\\x([0-9a-fA-F]{2}) ]]; then
                 byte2="${BASH_REMATCH[1]}"
-            elif [[ "$content" =~ ^\\([rnt0\\]) ]]; then
+            elif [[ "$content" =~ ^\\([rntfvba0\\]) ]]; then
                 byte2=$(parse_byte "\\${BASH_REMATCH[1]}")
             elif [ -n "$content" ]; then
                 byte2=$(printf '%02x' "'${content:0:1}")
