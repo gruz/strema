@@ -102,6 +102,8 @@ get_position_coords() {
 }
 
 # Build video filter and encoding parameters
+FFMPEG_VIDEO_OPTS=""
+
 if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
     
     # Set default values
@@ -153,26 +155,11 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
     log "Using optimized software encoding (libx264)"
     log "Parameters: CRF=${VIDEO_CRF}, font size=${OVERLAY_FONTSIZE}"
     
-    # Auto-reconnect loop (watchdog service handles service restarts)
-    RECONNECT_DELAY=5
-    
-    while true; do
-        log "Connecting to stream..."
-        
-        ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5 \
-            -rtsp_transport "$RTSP_TRANSPORT" \
-            -i "$RTSP_URL" \
-            -vf "$VF_FILTER" \
-            -c:v libx264 -preset ultrafast -tune zerolatency -crf ${VIDEO_CRF} -g 60 -sc_threshold 0 -threads 2 \
-            -an \
-            -f flv \
-            "$RTMP_URL"
-        
-        log "Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
-        sleep $RECONNECT_DELAY
-    done
+    FFMPEG_VIDEO_OPTS="-vf \"$VF_FILTER\" -c:v libx264 -preset ultrafast -tune zerolatency -crf ${VIDEO_CRF} -g 60 -sc_threshold 0 -threads 2"
 else
     log "Overlay disabled - using stream copy"
+    FFMPEG_VIDEO_OPTS="-c:v copy"
+fi
     
     # Auto-reconnect loop (watchdog service handles service restarts)
     RECONNECT_DELAY=5
@@ -180,11 +167,11 @@ else
     while true; do
         log "Connecting to stream..."
         
-        # No overlay - just copy video without re-encoding
         ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5 \
             -rtsp_transport "$RTSP_TRANSPORT" \
+        -fflags +genpts -thread_queue_size 512 \
             -i "$RTSP_URL" \
-            -c:v copy \
+        $FFMPEG_VIDEO_OPTS \
             -an \
             -f flv \
             "$RTMP_URL"
@@ -192,4 +179,3 @@ else
         log "Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
         sleep $RECONNECT_DELAY
     done
-fi
