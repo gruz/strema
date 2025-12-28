@@ -21,11 +21,25 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
+# Check if service is enabled (should be running)
+IS_ENABLED=$(systemctl is-enabled "$SERVICE_NAME" 2>/dev/null)
+if [ "$IS_ENABLED" != "enabled" ]; then
+    # Service is disabled - user stopped it intentionally, don't monitor
+    exit 0
+fi
+
+# Check if service is active
+IS_ACTIVE=$(systemctl is-active "$SERVICE_NAME" 2>/dev/null)
+if [ "$IS_ACTIVE" != "active" ]; then
+    log "WARNING: Service $SERVICE_NAME is enabled but not active (status: $IS_ACTIVE)"
+    exit 0
+fi
+
 # Get ffmpeg PID from service
 FFMPEG_PID=$(systemctl show -p MainPID --value "$SERVICE_NAME" 2>/dev/null)
 
 if [ -z "$FFMPEG_PID" ] || [ "$FFMPEG_PID" = "0" ]; then
-    log "WARNING: Service $SERVICE_NAME is not running"
+    log "WARNING: Service $SERVICE_NAME is running but no main PID found"
     exit 0
 fi
 
