@@ -56,7 +56,8 @@ RTSP_URL="rtsp://${FORPOST_IP}:${RTSP_PORT}/${VIDEO_DEVICE}"
 USE_UDP_PROXY=${USE_UDP_PROXY:-true}
 UDP_PROXY_PORT=${UDP_PROXY_PORT:-5000}
 if [ "$USE_UDP_PROXY" = "true" ]; then
-    INPUT_URL="udp://127.0.0.1:${UDP_PROXY_PORT}?overrun_nonfatal=1&fifo_size=188416&buffer_size=212992&listen=0"
+    # Small buffer to prevent lag accumulation - old packets are dropped
+    INPUT_URL="udp://127.0.0.1:${UDP_PROXY_PORT}?overrun_nonfatal=1&fifo_size=65536&buffer_size=131072&listen=0"
     log "UDP Proxy mode enabled - reading from UDP port ${UDP_PROXY_PORT}"
 else
     INPUT_URL="$RTSP_URL"
@@ -185,8 +186,11 @@ while true; do
     
     # Build ffmpeg command based on source type
     if [ "$USE_UDP_PROXY" = "true" ]; then
-        # UDP input - simple configuration
-        INPUT_PARAMS="-i $INPUT_URL"
+        # UDP input - low latency configuration
+        # -fflags nobuffer: disable input buffering
+        # -flags low_delay: minimize encoding delay
+        # -probesize: quick stream analysis
+        INPUT_PARAMS="-fflags nobuffer -flags low_delay -probesize 32768 -analyzeduration 0 -i $INPUT_URL"
     else
         # RTSP input
         INPUT_PARAMS="-rtsp_transport $RTSP_TRANSPORT -i $RTSP_URL"
