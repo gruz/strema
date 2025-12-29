@@ -185,7 +185,7 @@ while true; do
     
     # Common ffmpeg parameters
     COMMON_PARAMS=(-hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5)
-    OUTPUT_PARAMS=(-an -max_muxing_queue_size 128 -flush_packets 1 -f flv "$RTMP_URL")
+    OUTPUT_PARAMS=(-an -max_muxing_queue_size 16 -flush_packets 1 -f flv "$RTMP_URL")
     
     # Build input parameters based on source type
     if [ "$USE_UDP_PROXY" = "true" ]; then
@@ -198,7 +198,7 @@ while true; do
     
     # Build video encoding parameters
     if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
-        VIDEO_PARAMS=(-vf "$VF_FILTER" -r ${VIDEO_FPS} -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -crf ${VIDEO_CRF} -g ${VIDEO_GOP} -sc_threshold 0 -threads 2)
+        VIDEO_PARAMS=(-vf "$VF_FILTER" -r ${VIDEO_FPS} -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -crf ${VIDEO_CRF} -g ${VIDEO_GOP} -sc_threshold 0 -threads 2 -x264opts sliced-threads=1:rc-lookahead=0)
     else
         VIDEO_PARAMS=(-r ${VIDEO_FPS} -c:v copy)
     fi
