@@ -27,8 +27,15 @@ fi
 echo "✓ Code updated"
 echo ""
 
-# Step 2: Run install script
-echo "[2/4] Running install script..."
+# Step 2: Check service status BEFORE install
+echo "[2/5] Checking service status..."
+STREAM_WAS_ACTIVE=$(sudo systemctl is-active forpost-stream 2>/dev/null || echo "inactive")
+UDP_WAS_ACTIVE=$(sudo systemctl is-active forpost-udp-proxy 2>/dev/null || echo "inactive")
+echo "Stream: $STREAM_WAS_ACTIVE, UDP Proxy: $UDP_WAS_ACTIVE"
+echo ""
+
+# Step 3: Run install script
+echo "[3/5] Running install script..."
 sudo ./install.sh
 if [ $? -ne 0 ]; then
     echo "ERROR: install.sh failed"
@@ -36,8 +43,8 @@ if [ $? -ne 0 ]; then
 fi
 echo ""
 
-# Step 3: Restart web interface
-echo "[3/4] Restarting web interface..."
+# Step 4: Restart web interface
+echo "[4/5] Restarting web interface..."
 sudo systemctl restart forpost-stream-web
 if [ $? -eq 0 ]; then
     echo "✓ Web interface restarted"
@@ -46,10 +53,10 @@ else
 fi
 echo ""
 
-# Step 4: Restart stream services (if running)
-echo "[4/4] Restarting stream services..."
-STREAM_ACTIVE=$(sudo systemctl is-active forpost-stream 2>/dev/null || echo "inactive")
-UDP_ACTIVE=$(sudo systemctl is-active forpost-udp-proxy 2>/dev/null || echo "inactive")
+# Step 5: Restart stream services (if they were running before)
+echo "[5/5] Restarting stream services..."
+STREAM_ACTIVE="$STREAM_WAS_ACTIVE"
+UDP_ACTIVE="$UDP_WAS_ACTIVE"
 
 if [ "$STREAM_ACTIVE" = "active" ]; then
     echo "Restarting stream service..."

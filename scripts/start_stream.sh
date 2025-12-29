@@ -56,7 +56,7 @@ RTSP_URL="rtsp://${FORPOST_IP}:${RTSP_PORT}/${VIDEO_DEVICE}"
 USE_UDP_PROXY=${USE_UDP_PROXY:-true}
 UDP_PROXY_PORT=${UDP_PROXY_PORT:-5000}
 if [ "$USE_UDP_PROXY" = "true" ]; then
-    INPUT_URL="udp://127.0.0.1:${UDP_PROXY_PORT}?overrun_nonfatal=1&fifo_size=188416&listen=0"
+    INPUT_URL="udp://127.0.0.1:${UDP_PROXY_PORT}?overrun_nonfatal=1&fifo_size=32768&listen=0"
     log "UDP Proxy mode enabled - reading from UDP port ${UDP_PROXY_PORT}"
 else
     INPUT_URL="$RTSP_URL"
@@ -184,13 +184,13 @@ while true; do
     log "Connecting to stream..."
     
     # Common ffmpeg parameters
-    COMMON_PARAMS=(-hide_banner -loglevel "$FFMPEG_LOGLEVEL")
+    COMMON_PARAMS=(-hide_banner -loglevel "$FFMPEG_LOGLEVEL" -vsync drop -frame_drop_threshold 1.5)
     OUTPUT_PARAMS=(-an -max_muxing_queue_size 16 -flush_packets 1 -f flv "$RTMP_URL")
     
     # Build input parameters based on source type
     if [ "$USE_UDP_PROXY" = "true" ]; then
         # UDP input - minimal buffering, fast processing
-        INPUT_PARAMS=(-fflags +genpts+nobuffer -analyzeduration 1000000 -probesize 1000000 -i "$INPUT_URL")
+        INPUT_PARAMS=(-fflags +genpts+nobuffer -analyzeduration 300000 -probesize 32768 -i "$INPUT_URL")
     else
         # RTSP input - needs more buffering for network stability
         INPUT_PARAMS=(-rtsp_transport "$RTSP_TRANSPORT" -fflags +genpts+nobuffer -thread_queue_size 256 -i "$RTSP_URL")
@@ -203,7 +203,8 @@ while true; do
         VIDEO_PARAMS=(-c:v copy)
     fi
     
-    # Run ffmpeg with array expansion
+    # Run ffmpeg with frame dropping enabled
+    # -vsync drop and -frame_drop_threshold allow ffmpeg to skip frames when lagging
     ffmpeg "${COMMON_PARAMS[@]}" "${INPUT_PARAMS[@]}" "${VIDEO_PARAMS[@]}" "${OUTPUT_PARAMS[@]}"
     
     log "Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
