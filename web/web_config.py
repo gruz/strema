@@ -11,6 +11,16 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent
 CONFIG_FILE = PROJECT_ROOT / 'config' / 'stream.conf'
 CONFIG_TEMPLATE = PROJECT_ROOT / 'config' / 'stream.conf.template'
+VERSION_FILE = PROJECT_ROOT / 'VERSION'
+
+def get_version():
+    """Get application version from VERSION file."""
+    try:
+        if VERSION_FILE.exists():
+            return VERSION_FILE.read_text().strip()
+    except:
+        pass
+    return "unknown"
 
 
 def is_config_ready(config: dict) -> bool:
@@ -70,6 +80,15 @@ def save_config(config_data):
             template_content = f.read()
         with open(CONFIG_FILE, 'w') as f:
             f.write(template_content)
+        # Set ownership to original user (not root)
+        try:
+            import pwd
+            sudo_user = os.environ.get('SUDO_USER')
+            if sudo_user:
+                pw_record = pwd.getpwnam(sudo_user)
+                os.chown(CONFIG_FILE, pw_record.pw_uid, pw_record.pw_gid)
+        except:
+            pass
     
     if not CONFIG_FILE.exists():
         return False, "Configuration file not found"
@@ -115,9 +134,10 @@ def index():
     """Main page with configuration editor."""
     config, comments = parse_config()
     config_exists = CONFIG_FILE.exists()
+    version = get_version()
     if (not config_exists) or (not is_config_ready(config)):
-        return render_template('installer.html', config=config)
-    return render_template('index.html', config=config, comments=comments)
+        return render_template('installer.html', config=config, version=version)
+    return render_template('index.html', config=config, comments=comments, version=version)
 
 
 @app.route('/api/installer', methods=['POST'])

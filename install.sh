@@ -14,6 +14,11 @@ echo "=========================================="
 echo "Installing Forpost Stream"
 echo "=========================================="
 
+# Remember original user (before sudo elevation)
+ORIGINAL_USER="${SUDO_USER:-$USER}"
+ORIGINAL_UID=$(id -u "$ORIGINAL_USER")
+ORIGINAL_GID=$(id -g "$ORIGINAL_USER")
+
 # Auto-elevate with sudo if not root
 if [ "$EUID" -ne 0 ]; then
     exec sudo "$0" "$@"
@@ -50,6 +55,7 @@ REQUIRED_FILES=(
     "$SCRIPT_DIR/systemd/forpost-stream-watchdog.timer"
     "$SCRIPT_DIR/systemd/forpost-stream-watchdog.service"
     "$SCRIPT_DIR/systemd/forpost-udp-proxy.service"
+    "$SCRIPT_DIR/VERSION"
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
@@ -65,6 +71,20 @@ chmod +x "$SCRIPT_DIR/web/web_config.py"
 
 # Create logs directory if it doesn't exist
 mkdir -p "$SCRIPT_DIR/logs"
+
+# Fix ownership of config and logs directories
+echo "Fixing ownership of config and logs directories..."
+chown -R "$ORIGINAL_UID:$ORIGINAL_GID" "$SCRIPT_DIR/config" 2>/dev/null || true
+chown -R "$ORIGINAL_UID:$ORIGINAL_GID" "$SCRIPT_DIR/logs" 2>/dev/null || true
+
+# Fix ownership of existing config file if it's owned by root
+if [ -f "$CONFIG_FILE" ]; then
+    FILE_OWNER=$(stat -c '%u' "$CONFIG_FILE")
+    if [ "$FILE_OWNER" = "0" ]; then
+        echo "Config file owned by root, changing to $ORIGINAL_USER..."
+        chown "$ORIGINAL_UID:$ORIGINAL_GID" "$CONFIG_FILE"
+    fi
+fi
 
 echo "All files in place."
 
