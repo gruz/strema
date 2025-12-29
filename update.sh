@@ -18,7 +18,7 @@ if [ ! -d ".git" ]; then
 fi
 
 # Step 1: Pull latest changes
-echo "[1/4] Pulling latest changes from git..."
+echo "[1/5] Pulling latest changes from git..."
 git pull
 if [ $? -ne 0 ]; then
     echo "ERROR: git pull failed"
@@ -36,11 +36,12 @@ echo ""
 
 # Step 3: Run install script
 echo "[3/5] Running install script..."
-sudo ./install.sh
-if [ $? -ne 0 ]; then
+sudo ./install.sh 2>&1 | grep -v "^\[" || true
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
     echo "ERROR: install.sh failed"
     exit 1
 fi
+echo "✓ Installation completed"
 echo ""
 
 # Step 4: Restart web interface
