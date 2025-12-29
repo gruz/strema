@@ -170,6 +170,10 @@ def start_service():
         if not is_config_ready(config):
             return jsonify({'success': False, 'error': 'Спочатку заповніть RTMP URL у налаштуваннях і збережіть конфігурацію'}), 400
 
+        # Start UDP proxy if enabled
+        if config.get('USE_UDP_PROXY', 'true') == 'true':
+            os.system('sudo systemctl start forpost-udp-proxy')
+        
         result = os.system('sudo systemctl start forpost-stream')
         if result == 0:
             # Start auto-restart timer if enabled
@@ -188,6 +192,8 @@ def stop_service():
         # Stop auto-restart timer first
         os.system('sudo systemctl stop forpost-stream-autorestart.timer 2>/dev/null')
         result = os.system('sudo systemctl stop forpost-stream')
+        # Stop UDP proxy as well
+        os.system('sudo systemctl stop forpost-udp-proxy 2>/dev/null')
         if result == 0:
             return jsonify({'success': True, 'message': 'Stream stopped successfully'})
         else:
@@ -203,6 +209,10 @@ def restart_service():
         if not is_config_ready(config):
             return jsonify({'success': False, 'error': 'Спочатку заповніть RTMP URL у налаштуваннях і збережіть конфігурацію'}), 400
 
+        # Restart UDP proxy if enabled
+        if config.get('USE_UDP_PROXY', 'true') == 'true':
+            os.system('sudo systemctl restart forpost-udp-proxy')
+        
         result = os.system('sudo systemctl restart forpost-stream')
         if result == 0:
             return jsonify({'success': True, 'message': 'Stream restarted successfully'})

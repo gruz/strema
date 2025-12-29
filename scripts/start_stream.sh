@@ -52,6 +52,16 @@ fi
 # Build RTSP URL
 RTSP_URL="rtsp://${FORPOST_IP}:${RTSP_PORT}/${VIDEO_DEVICE}"
 
+# UDP Proxy settings (if enabled, read from UDP instead of RTSP)
+USE_UDP_PROXY=${USE_UDP_PROXY:-true}
+UDP_PROXY_PORT=${UDP_PROXY_PORT:-5000}
+if [ "$USE_UDP_PROXY" = "true" ]; then
+    INPUT_URL="udp://127.0.0.1:${UDP_PROXY_PORT}?overrun_nonfatal=1&fifo_size=50000000&listen=0"
+    log "UDP Proxy mode enabled - reading from UDP port ${UDP_PROXY_PORT}"
+else
+    INPUT_URL="$RTSP_URL"
+fi
+
 # Validate required settings
 if [ -z "${RTMP_URL}" ] || [[ "${RTMP_URL}" == *"__RTMP_URL__"* ]]; then
     log "ERROR: RTMP_URL is not configured. Open the web interface and set RTMP URL, then restart the service."
@@ -173,16 +183,28 @@ RECONNECT_DELAY=5
 while true; do
     log "Connecting to stream..."
     
-    eval ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5 \
-        -rtsp_transport "$RTSP_TRANSPORT" \
-        -fflags +genpts+nobuffer -thread_queue_size 512 \
-        -i "$RTSP_URL" \
-        $VIDEO_OPTS \
-        -an \
-        -max_muxing_queue_size 128 \
-        -flush_packets 1 \
-        -f flv \
-        "$RTMP_URL"
+    # Common ffmpeg parameters
+    COMMON_PARAMS=(-hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5)
+    OUTPUT_PARAMS=(-an -max_muxing_queue_size 128 -flush_packets 1 -f flv "$RTMP_URL")
+    
+    # Build input parameters based on source type
+    if [ "$USE_UDP_PROXY" = "true" ]; then
+        # UDP input - minimal buffering, fast processing
+        INPUT_PARAMS=(-fflags +genpts+nobuffer -i "$INPUT_URL")
+    else
+        # RTSP input - needs more buffering for network stability
+        INPUT_PARAMS=(-rtsp_transport "$RTSP_TRANSPORT" -fflags +genpts+nobuffer -thread_queue_size 512 -i "$RTSP_URL")
+    fi
+    
+    # Build video encoding parameters
+    if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
+        VIDEO_PARAMS=(-vf "$VF_FILTER" -r ${VIDEO_FPS} -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -crf ${VIDEO_CRF} -g ${VIDEO_GOP} -sc_threshold 0 -threads 2)
+    else
+        VIDEO_PARAMS=(-r ${VIDEO_FPS} -c:v copy)
+    fi
+    
+    # Run ffmpeg with array expansion
+    ffmpeg "${COMMON_PARAMS[@]}" "${INPUT_PARAMS[@]}" "${VIDEO_PARAMS[@]}" "${OUTPUT_PARAMS[@]}"
     
     log "Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
     sleep $RECONNECT_DELAY

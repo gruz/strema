@@ -52,3 +52,11 @@ AUTO_RESTART_ENABLED=false
 
 # Auto-restart interval in hours (default: 2)
 AUTO_RESTART_INTERVAL=2
+
+# UDP Proxy mode (true/false)
+# Isolates ffmpeg from RTSP source to prevent blocking other clients
+# Recommended: true (enabled by default)
+USE_UDP_PROXY=true
+
+# UDP Proxy port (default: 5000)
+UDP_PROXY_PORT=5000

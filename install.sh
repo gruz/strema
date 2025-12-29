@@ -39,6 +39,7 @@ REQUIRED_FILES=(
     "$SCRIPT_DIR/scripts/get_frequency.sh"
     "$SCRIPT_DIR/scripts/update_frequency.sh"
     "$SCRIPT_DIR/scripts/watchdog.sh"
+    "$SCRIPT_DIR/scripts/udp_proxy.sh"
     "$CONFIG_TEMPLATE"
     "$SERVICE_FILE"
     "$SCRIPT_DIR/web/web_config.py"
@@ -48,6 +49,7 @@ REQUIRED_FILES=(
     "$SCRIPT_DIR/systemd/forpost-stream-autorestart.service"
     "$SCRIPT_DIR/systemd/forpost-stream-watchdog.timer"
     "$SCRIPT_DIR/systemd/forpost-stream-watchdog.service"
+    "$SCRIPT_DIR/systemd/forpost-udp-proxy.service"
 )
 
 for file in "${REQUIRED_FILES[@]}"; do
@@ -74,6 +76,7 @@ sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream.servic
 sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-config.path" > /etc/systemd/system/forpost-stream-config.path
 sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-web.service" > /etc/systemd/system/forpost-stream-web.service
 sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-watchdog.service" > /etc/systemd/system/forpost-stream-watchdog.service
+sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-udp-proxy.service" > /etc/systemd/system/forpost-udp-proxy.service
 cp "$SCRIPT_DIR/systemd/forpost-stream-restart.service" /etc/systemd/system/
 cp "$SCRIPT_DIR/systemd/forpost-stream-autorestart.timer" /etc/systemd/system/
 cp "$SCRIPT_DIR/systemd/forpost-stream-autorestart.service" /etc/systemd/system/
@@ -86,6 +89,9 @@ echo "[5/7] Enabling services..."
 # Stream service is disabled by default - control via web interface
 systemctl disable "$SERVICE_NAME" 2>/dev/null || true
 systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+# UDP proxy is disabled by default - controlled by web interface
+systemctl disable forpost-udp-proxy 2>/dev/null || true
+systemctl stop forpost-udp-proxy 2>/dev/null || true
 # Enable config watcher for automatic restart on config changes
 systemctl enable forpost-stream-config.path
 systemctl start forpost-stream-config.path

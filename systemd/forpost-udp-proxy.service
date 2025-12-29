@@ -1,0 +1,20 @@
+[Unit]
+Description=Forpost UDP Proxy for RTSP Stream
+After=network.target dzyga.service rtsp-server.service
+Wants=dzyga.service rtsp-server.service
+Before=forpost-stream.service
+
+[Service]
+Type=simple
+User=root
+Group=www-data
+WorkingDirectory=__INSTALL_DIR__
+ExecStartPre=/bin/sleep 10
+ExecStart=__INSTALL_DIR__/scripts/udp_proxy.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

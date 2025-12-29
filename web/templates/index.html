@@ -358,6 +358,16 @@
                     <summary style="cursor: pointer; font-weight: 600; color: #333;">Розширені налаштування</summary>
 
                     <div class="form-group" style="margin-top: 16px;">
+                        <label for="USE_UDP_PROXY">UDP Proxy режим</label>
+                        <span class="help-text">Ізолює ffmpeg від RTSP джерела, запобігає блокуванню інших клієнтів (GStreamer/VLC)</span>
+                        <span class="help-text" style="color: #28a745; font-weight: 600;">✓ Рекомендовано: увімкнено</span>
+                        <select id="USE_UDP_PROXY" name="USE_UDP_PROXY">
+                            <option value="true">Увімкнено</option>
+                            <option value="false">Вимкнено</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label for="FORPOST_IP">IP адреса FORPOST</label>
                         <span class="help-text">Використовуйте "auto" для автоматичного визначення</span>
                         <input type="text" id="FORPOST_IP" name="FORPOST_IP" value="auto">
