@@ -40,7 +40,7 @@ if ! command -v ffmpeg &> /dev/null; then
 fi
 
 SOURCE_RTSP_URL="rtsp://${FORPOST_IP}:${RTSP_PORT}/${VIDEO_DEVICE}"
-UDP_OUTPUT="udp://127.0.0.1:${UDP_PORT}?pkt_size=1316&buffer_size=65535"
+UDP_OUTPUT="udp://127.0.0.1:${UDP_PORT}?pkt_size=1316"
 
 log "=========================================="
 log "Starting UDP Multicast Proxy"
@@ -57,14 +57,14 @@ while true; do
     # Read from RTSP and stream to UDP
     # -c:v copy = no re-encoding, minimal CPU
     # -f mpegts = MPEG-TS format for UDP streaming
-    # -flush_packets 0 = don't wait, drop packets if consumer is slow
-    ffmpeg -hide_banner -loglevel info -stats -stats_period 5 \
+    # -flush_packets 1 = immediate packet flushing for low latency
+    ffmpeg -hide_banner -loglevel info \
         -rtsp_transport "$RTSP_TRANSPORT" \
-        -fflags +genpts -thread_queue_size 512 \
+        -fflags +genpts+nobuffer \
         -i "$SOURCE_RTSP_URL" \
         -c:v copy -an \
         -f mpegts \
-        -flush_packets 0 \
+        -flush_packets 1 \
         "$UDP_OUTPUT"
     
     log "Proxy disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
