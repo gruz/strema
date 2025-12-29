@@ -184,7 +184,7 @@ while true; do
     log "Connecting to stream..."
     
     # Common ffmpeg parameters
-    COMMON_PARAMS=(-hide_banner -loglevel "$FFMPEG_LOGLEVEL" -stats -stats_period 5)
+    COMMON_PARAMS=(-hide_banner -loglevel "$FFMPEG_LOGLEVEL")
     OUTPUT_PARAMS=(-an -max_muxing_queue_size 16 -flush_packets 1 -f flv "$RTMP_URL")
     
     # Build input parameters based on source type
@@ -193,14 +193,14 @@ while true; do
         INPUT_PARAMS=(-fflags +genpts+nobuffer -i "$INPUT_URL")
     else
         # RTSP input - needs more buffering for network stability
-        INPUT_PARAMS=(-rtsp_transport "$RTSP_TRANSPORT" -fflags +genpts+nobuffer -thread_queue_size 512 -i "$RTSP_URL")
+        INPUT_PARAMS=(-rtsp_transport "$RTSP_TRANSPORT" -fflags +genpts+nobuffer -thread_queue_size 256 -i "$RTSP_URL")
     fi
     
     # Build video encoding parameters
     if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
-        VIDEO_PARAMS=(-vf "$VF_FILTER" -r ${VIDEO_FPS} -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -crf ${VIDEO_CRF} -g ${VIDEO_GOP} -sc_threshold 0 -threads 2 -x264opts sliced-threads=1:rc-lookahead=0)
+        VIDEO_PARAMS=(-vf "$VF_FILTER" -r ${VIDEO_FPS} -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -crf ${VIDEO_CRF} -g ${VIDEO_GOP} -sc_threshold 0 -x264opts sliced-threads=1:rc-lookahead=0)
     else
-        VIDEO_PARAMS=(-r ${VIDEO_FPS} -c:v copy)
+        VIDEO_PARAMS=(-c:v copy)
     fi
     
     # Run ffmpeg with array expansion
