@@ -28,7 +28,7 @@ VIDEO_CRF=28
 # Video frame rate (frames per second)
 # Lower FPS = less bandwidth, better stability
 # Recommended: 15 for low bandwidth, 25 for smooth video
-VIDEO_FPS=15
+VIDEO_FPS=25
 
 # Text to display on video
 # Leave empty to disable overlay
