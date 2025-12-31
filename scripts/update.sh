@@ -8,12 +8,26 @@ GITHUB_REPO="gruz/strema"
 REQUESTED_VERSION="$1"
 
 # Determine installation directory
-if [ -n "$SUDO_USER" ]; then
+# When run via systemd-run, we need to find the actual installation
+if [ -d "/home/rpidrone/strema" ]; then
+    INSTALL_DIR="/home/rpidrone/strema"
+elif [ -n "$SUDO_USER" ]; then
     ORIGINAL_HOME=$(eval echo ~$SUDO_USER)
+    INSTALL_DIR="$ORIGINAL_HOME/strema"
 else
-    ORIGINAL_HOME="$HOME"
+    # Fallback: try to find strema directory
+    for user_home in /home/*; do
+        if [ -d "$user_home/strema" ]; then
+            INSTALL_DIR="$user_home/strema"
+            break
+        fi
+    done
+    
+    if [ -z "$INSTALL_DIR" ]; then
+        echo "❌ Error: Could not find strema installation directory"
+        exit 1
+    fi
 fi
-INSTALL_DIR="$ORIGINAL_HOME/strema"
 
 if [ -z "$REQUESTED_VERSION" ]; then
     echo "Usage: $0 <version>"
