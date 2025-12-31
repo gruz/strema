@@ -224,9 +224,47 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        .update-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .update-overlay.show {
+            display: flex;
+        }
+
+        .update-overlay .spinner {
+            border-color: #f3f3f3;
+            border-top-color: #667eea;
+            width: 60px;
+            height: 60px;
+            border-width: 6px;
+        }
+
+        .update-overlay .message {
+            color: white;
+            font-size: 18px;
+            margin-top: 20px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
+    <div id="updateOverlay" class="update-overlay">
+        <div class="spinner"></div>
+        <div class="message" id="updateMessage">Оновлення...</div>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1>🎥 FORPOST Stream</h1>
@@ -946,10 +984,11 @@
                 return;
             }
             
-            const updateButtons = document.querySelectorAll('#updatesList button');
-            updateButtons.forEach(btn => btn.disabled = true);
+            const overlay = document.getElementById('updateOverlay');
+            const message = document.getElementById('updateMessage');
             
-            showAlert('⏳ Запуск оновлення...', 'success');
+            overlay.classList.add('show');
+            message.textContent = 'Запуск оновлення...';
             
             fetch('/api/updates/install', {
                 method: 'POST',
@@ -959,7 +998,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showAlert('⏳ Оновлення... Очікування перезапуску сервера...', 'success');
+                    message.textContent = 'Оновлення... Очікування перезапуску сервера...';
                     
                     let attempts = 0;
                     let serverDown = false;
@@ -971,27 +1010,29 @@
                             .then(() => {
                                 if (serverDown) {
                                     clearInterval(checkInterval);
-                                    showAlert('✅ Оновлення завершено!', 'success');
+                                    message.textContent = '✅ Оновлення завершено! Перезавантаження...';
                                     setTimeout(() => location.reload(), 1000);
                                 }
                             })
                             .catch(() => {
                                 serverDown = true;
+                                message.textContent = 'Оновлення... Сервер перезапускається...';
                             });
                         
                         if (attempts > 60) {
                             clearInterval(checkInterval);
-                            showAlert('⚠️ Перезавантажте сторінку вручну', 'warning');
+                            overlay.classList.remove('show');
+                            showAlert('⚠️ Оновлення може тривати довше. Перезавантажте сторінку вручну.', 'warning');
                         }
                     }, 1000);
                 } else {
+                    overlay.classList.remove('show');
                     showAlert('❌ ' + (data.error || 'Помилка'), 'error');
-                    updateButtons.forEach(btn => btn.disabled = false);
                 }
             })
             .catch(err => {
+                overlay.classList.remove('show');
                 showAlert('❌ ' + err.message, 'error');
-                updateButtons.forEach(btn => btn.disabled = false);
             });
         }
         
