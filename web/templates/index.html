@@ -280,7 +280,7 @@
 
         <div class="card" id="updateCard" style="display: none;">
             <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="toggleUpdateSection()">
-                <span>🔄 Оновлення системи <span style="font-size: 12px; color: #999;">(версія: <span id="currentVersionBadge">...</span>)</span></span>
+                <span>🔄 Оновлення системи <span style="font-size: 12px; color: #999;">(версія: <span id="currentVersionBadge">...</span>)</span> <span id="newVersionBadge" style="display: none; background: #28a745; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">НОВА ВЕРСІЯ</span></span>
                 <span id="updateToggleIcon" style="font-size: 20px;">▼</span>
             </div>
             
@@ -931,12 +931,15 @@
                     // Show update card
                     document.getElementById('updateCard').style.display = 'block';
                     
-                    // Show update available banner
+                    // Show update available banner and badge
+                    const newVersionBadge = document.getElementById('newVersionBadge');
                     if (data.has_update) {
                         document.getElementById('latestVersion').textContent = data.latest;
                         document.getElementById('updateAvailable').style.display = 'block';
+                        newVersionBadge.style.display = 'inline-block';
                     } else {
                         document.getElementById('updateAvailable').style.display = 'none';
+                        newVersionBadge.style.display = 'none';
                     }
                     
                     // Build releases list
