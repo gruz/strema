@@ -941,6 +941,60 @@
                     console.error('Failed to check updates:', err);
                 });
         }
+        function installUpdate(version) {
+            if (!confirm(`Ви впевнені, що хочете оновити до версії ${version}?`)) {
+                return;
+            }
+            
+            const updateButtons = document.querySelectorAll('#updatesList button');
+            updateButtons.forEach(btn => btn.disabled = true);
+            
+            showAlert('⏳ Запуск оновлення...', 'success');
+            
+            fetch('/api/updates/install', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ version: version })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('⏳ Оновлення... Очікування перезапуску сервера...', 'success');
+                    
+                    let attempts = 0;
+                    let serverDown = false;
+                    
+                    const checkInterval = setInterval(() => {
+                        attempts++;
+                        
+                        fetch('/api/status', { cache: 'no-cache' })
+                            .then(() => {
+                                if (serverDown) {
+                                    clearInterval(checkInterval);
+                                    showAlert('✅ Оновлення завершено!', 'success');
+                                    setTimeout(() => location.reload(), 1000);
+                                }
+                            })
+                            .catch(() => {
+                                serverDown = true;
+                            });
+                        
+                        if (attempts > 60) {
+                            clearInterval(checkInterval);
+                            showAlert('⚠️ Перезавантажте сторінку вручну', 'warning');
+                        }
+                    }, 1000);
+                } else {
+                    showAlert('❌ ' + (data.error || 'Помилка'), 'error');
+                    updateButtons.forEach(btn => btn.disabled = false);
+                }
+            })
+            .catch(err => {
+                showAlert('❌ ' + err.message, 'error');
+                updateButtons.forEach(btn => btn.disabled = false);
+            });
+        }
+        
         
         
         function toggleUpdateSection() {
