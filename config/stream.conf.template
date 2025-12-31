@@ -60,3 +60,9 @@ USE_UDP_PROXY=true
 
 # UDP Proxy port (default: 5000)
 UDP_PROXY_PORT=5000
+
+# Stream mode (always/on-lock/overlay)
+# - always: Stream continuously regardless of scanner state
+# - on-lock: Stream only when scanner is locked on frequency (pauses during scanning)
+# - overlay: Stream continuously but show "SCANNING..." indicator during scanning
+STREAM_MODE=always

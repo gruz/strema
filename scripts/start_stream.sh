@@ -74,11 +74,46 @@ log "Starting video stream"
 log "=========================================="
 log "RTSP source: $RTSP_URL"
 log "RTMP: ${RTMP_URL%/*}/***"
+log "Stream mode: $STREAM_MODE"
 log "=========================================="
 
 # File for dynamic frequency
 FREQ_FILE="/tmp/dzyga_freq.txt"
 FREQ_UPDATER="$SCRIPT_DIR/update_frequency.sh"
+SCAN_DETECTOR="$SCRIPT_DIR/detect_scan_state.sh"
+
+# Function to check if we should stream based on scan state
+# $1 - threshold: 1=fast/sensitive (for initial check), 2=tolerant (for monitoring)
+should_stream() {
+    local threshold=${1:-1}
+    
+    # In overlay mode, always stream (scanning indicator shown in overlay)
+    # In always mode, always stream (ignore scanning)
+    # In on-lock mode, only stream when locked
+    if [ "$STREAM_MODE" != "on-lock" ]; then
+        return 0
+    fi
+    
+    if [ ! -x "$SCAN_DETECTOR" ]; then
+        log "WARNING: Scan detector not found, streaming anyway"
+        return 0
+    fi
+    
+    "$SCAN_DETECTOR" 3 1.0 0 $threshold >/dev/null 2>&1
+    local state=$?
+    
+    case $state in
+        0)
+            return 0
+            ;;
+        1)
+            return 1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
 
 # Function to calculate position coordinates
 get_position_coords() {
@@ -120,6 +155,7 @@ VIDEO_CRF=${VIDEO_CRF:-30}
 VIDEO_FPS=${VIDEO_FPS:-25}
 OVERLAY_POSITION=${OVERLAY_POSITION:-top-left}
 FREQUENCY_POSITION=${FREQUENCY_POSITION:-bottom-left}
+STREAM_MODE=${STREAM_MODE:-always}
 
 # Calculate GOP (keyframe interval) based on FPS
 # GOP = FPS * 2 (keyframe every 2 seconds)
@@ -147,6 +183,8 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
             rm -f "$FREQ_FILE"
             echo "---" > "$FREQ_FILE"
             chmod 666 "$FREQ_FILE"
+            # Export STREAM_MODE so update_frequency.sh can use it
+            export STREAM_MODE
             "$FREQ_UPDATER" &
             FREQ_PID=$!
             trap "kill $FREQ_PID 2>/dev/null" EXIT
@@ -179,39 +217,64 @@ else
 fi
 
 # Auto-reconnect loop (watchdog service handles service restarts)
-RECONNECT_DELAY=5
+RECONNECT_DELAY=2
+CHECK_INTERVAL=5
 
 while true; do
-    log "Connecting to stream..."
-    
-    # Build ffmpeg command based on source type
-    if [ "$USE_UDP_PROXY" = "true" ]; then
-        # UDP input - low latency configuration
-        # -fflags nobuffer: disable input buffering
-        # -flags low_delay: minimize encoding delay
-        # -probesize: quick stream analysis
-        INPUT_PARAMS="-fflags nobuffer -flags low_delay -probesize 32768 -analyzeduration 0 -i $INPUT_URL"
+    # Initial check: fast detection (threshold=1) - any 1+ change = scanning
+    if should_stream 1; then
+        log "Connecting to stream..."
+        
+        # Build ffmpeg command based on source type
+        if [ "$USE_UDP_PROXY" = "true" ]; then
+            # UDP input - low latency configuration
+            # -fflags nobuffer: disable input buffering
+            # -flags low_delay: minimize encoding delay
+            # -probesize: quick stream analysis
+            INPUT_PARAMS="-fflags nobuffer -flags low_delay -probesize 32768 -analyzeduration 0 -i $INPUT_URL"
+        else
+            # RTSP input
+            INPUT_PARAMS="-rtsp_transport $RTSP_TRANSPORT -i $RTSP_URL"
+        fi
+        
+        # Build video encoding parameters and run in background
+        if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
+            # With overlay - need to encode
+            ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
+                $INPUT_PARAMS \
+                -vf "$VF_FILTER" \
+                -c:v libx264 -preset ultrafast -tune zerolatency \
+                -crf ${VIDEO_CRF} -g ${VIDEO_GOP} \
+                -an -f flv "$RTMP_URL" &
+        else
+            # No overlay - just copy
+            ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
+                $INPUT_PARAMS \
+                -c:v copy -an -f flv "$RTMP_URL" &
+        fi
+        
+        FFMPEG_PID=$!
+        
+        # Monitor ffmpeg and scan state
+        # During streaming: tolerant detection (threshold=2) - 2 changes = scanning
+        while kill -0 $FFMPEG_PID 2>/dev/null; do
+            sleep $CHECK_INTERVAL
+            
+            if [ "$STREAM_MODE" = "on-lock" ]; then
+                if ! should_stream 2; then
+                    log "Scanner started scanning, stopping stream..."
+                    kill $FFMPEG_PID 2>/dev/null
+                    wait $FFMPEG_PID 2>/dev/null
+                    break
+                fi
+            fi
+        done
+        
+        wait $FFMPEG_PID 2>/dev/null
+        log "Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
     else
-        # RTSP input
-        INPUT_PARAMS="-rtsp_transport $RTSP_TRANSPORT -i $RTSP_URL"
+        log "Scanner is scanning, waiting for lock... (checking again in ${RECONNECT_DELAY}s)"
     fi
     
-    # Build video encoding parameters
-    if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
-        # With overlay - need to encode
-        ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
-            $INPUT_PARAMS \
-            -vf "$VF_FILTER" \
-            -c:v libx264 -preset ultrafast -tune zerolatency \
-            -crf ${VIDEO_CRF} -g ${VIDEO_GOP} \
-            -an -f flv "$RTMP_URL"
-    else
-        # No overlay - just copy
-        ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
-            $INPUT_PARAMS \
-            -c:v copy -an -f flv "$RTMP_URL"
-    fi
-    
-    log "Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
     sleep $RECONNECT_DELAY
 done

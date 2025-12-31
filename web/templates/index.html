@@ -326,6 +326,16 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="STREAM_MODE">Режим трансляції при скануванні</label>
+                    <span class="help-text">Визначає поведінку трансляції коли DZYGA сканує частоти</span>
+                    <select id="STREAM_MODE" name="STREAM_MODE">
+                        <option value="always">Завжди транслювати (ігнорувати сканування)</option>
+                        <option value="on-lock">Транслювати тільки при зупинці (пауза під час сканування)</option>
+                        <option value="overlay">Показувати індикатор "СКАНУВАННЯ..." на екрані</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label for="OVERLAY_FONTSIZE">Розмір шрифту</label>
                     <input type="number" id="OVERLAY_FONTSIZE" name="OVERLAY_FONTSIZE" value="16" min="8" max="48">
                 </div>
