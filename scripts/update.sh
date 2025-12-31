@@ -211,9 +211,20 @@ systemctl start forpost-stream-watchdog.timer
 # Restart stream if it was active before update
 if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
     echo "Restarting stream service (was active before update)..."
-    # Give UDP proxy and camera time to fully initialize after graceful shutdown
-    echo "Waiting for services to stabilize..."
-    sleep 5
+    
+    # Read config to check if UDP proxy is enabled
+    CONFIG_FILE="$INSTALL_DIR/config/stream.conf"
+    if [ -f "$CONFIG_FILE" ]; then
+        USE_UDP_PROXY=$(grep "^USE_UDP_PROXY=" "$CONFIG_FILE" | cut -d'=' -f2 | tr -d '"' | tr -d "'" || echo "true")
+        
+        # Start UDP proxy if enabled (same as web interface does)
+        if [ "$USE_UDP_PROXY" = "true" ]; then
+            echo "Starting UDP proxy..."
+            systemctl start forpost-udp-proxy 2>/dev/null || true
+        fi
+    fi
+    
+    # Start stream service
     systemctl start forpost-stream
 fi
 
