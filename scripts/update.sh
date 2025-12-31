@@ -99,10 +99,16 @@ if systemctl is-active forpost-stream 2>/dev/null | grep -q "active"; then
     echo "Stream is currently active, will restart after update"
 fi
 
-# Stop services
+# Stop services gracefully
 echo ""
 echo "Stopping services..."
-systemctl stop forpost-stream 2>/dev/null || true
+# Give stream time to close RTSP connection gracefully
+if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
+    echo "Gracefully stopping stream to avoid camera connection issues..."
+    systemctl stop forpost-stream 2>/dev/null || true
+    # Wait for ffmpeg to fully close connections
+    sleep 3
+fi
 systemctl stop forpost-udp-proxy 2>/dev/null || true
 systemctl stop forpost-stream-web 2>/dev/null || true
 
