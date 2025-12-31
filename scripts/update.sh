@@ -111,13 +111,14 @@ echo ""
 echo "Extracting new version..."
 tar -xzf "strema-$REQUESTED_VERSION.tar.gz"
 
-# Remove old installation (except config, logs, and .git)
+# Remove old installation (except config, logs, .git, and .github)
 echo "Removing old files..."
 if [ -d "$INSTALL_DIR" ]; then
-    # Keep config, logs, and .git directory (for development)
+    # Keep config, logs, .git directory (for development), and .github (for workflows)
     mv "$INSTALL_DIR/config" "$TMP_DIR/config.backup" 2>/dev/null || true
     mv "$INSTALL_DIR/logs" "$TMP_DIR/logs.backup" 2>/dev/null || true
     mv "$INSTALL_DIR/.git" "$TMP_DIR/git.backup" 2>/dev/null || true
+    mv "$INSTALL_DIR/.github" "$TMP_DIR/github.backup" 2>/dev/null || true
     rm -rf "$INSTALL_DIR"
 fi
 
@@ -151,16 +152,22 @@ fi
 if [ -d "$TMP_DIR/git.backup" ]; then
     mv "$TMP_DIR/git.backup" "$INSTALL_DIR/.git"
     echo "✅ Git repository preserved"
-    
-    # Clean up git working directory to avoid uncommitted changes
+fi
+
+# Restore .github directory if it existed (for GitHub Actions)
+if [ -d "$TMP_DIR/github.backup" ]; then
+    mv "$TMP_DIR/github.backup" "$INSTALL_DIR/.github"
+    echo "✅ GitHub workflows preserved"
+fi
+
+# Clean up git working directory to avoid uncommitted changes
+if [ -d "$INSTALL_DIR/.git" ]; then
     cd "$INSTALL_DIR"
-    if [ -d ".git" ]; then
-        # Reset any tracked files that were modified during update
-        git reset --hard HEAD 2>/dev/null || true
-        # Clean untracked files that match .gitignore
-        git clean -fd 2>/dev/null || true
-        echo "✅ Git working directory cleaned"
-    fi
+    # Only reset files that exist in the new version (avoid deleting .github)
+    git status --porcelain | grep '^ M' | awk '{print $2}' | xargs -r git checkout -- 2>/dev/null || true
+    # Clean untracked files that match .gitignore
+    git clean -fd 2>/dev/null || true
+    echo "✅ Git working directory cleaned"
 fi
 
 # Restore specific config file if backed up separately
