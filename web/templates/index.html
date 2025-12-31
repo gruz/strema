@@ -942,54 +942,6 @@
                 });
         }
         
-        function installUpdate(version) {
-            if (!confirm(`Ви впевнені, що хочете оновити до версії ${version}?\n\nПроцес займе близько 30 секунд.`)) {
-                return;
-            }
-            
-            // Disable update buttons during update
-            const updateButtons = document.querySelectorAll('#updatesList button');
-            updateButtons.forEach(btn => btn.disabled = true);
-            
-            showAlert('⏳ Оновлення... Зачекайте 30 секунд.', 'success');
-            
-            fetch('/api/updates/install', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ version: version })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Countdown timer
-                    let countdown = 30;
-                    const countdownInterval = setInterval(() => {
-                        countdown--;
-                        showAlert(`⏳ Оновлення... Перезавантаження через ${countdown} сек.`, 'success');
-                        if (countdown <= 0) {
-                            clearInterval(countdownInterval);
-                        }
-                    }, 1000);
-                    
-                    // Reload after 30 seconds
-                    setTimeout(() => {
-                        showAlert('🔄 Перезавантаження сторінки...', 'success');
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    }, 30000);
-                } else {
-                    showAlert('❌ ' + (data.error || 'Помилка оновлення'), 'error');
-                    updateButtons.forEach(btn => btn.disabled = false);
-                }
-            })
-            .catch(err => {
-                showAlert('❌ Помилка: ' + err.message, 'error');
-                updateButtons.forEach(btn => btn.disabled = false);
-            });
-        }
         
         function toggleUpdateSection() {
             const content = document.getElementById('updateContent');
