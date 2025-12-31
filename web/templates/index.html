@@ -240,6 +240,33 @@
 
         <div id="alertBox" class="alert"></div>
 
+        <div class="card" id="updateCard" style="display: none;">
+            <div class="section-title">🔄 Оновлення системи</div>
+            
+            <div style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div>
+                        <strong>Поточна версія:</strong> <span id="currentVersion">...</span>
+                    </div>
+                    <div>
+                        <label style="font-weight: normal; margin: 0;">
+                            Канал:
+                            <select id="updateChannel" style="width: auto; padding: 4px 8px; margin-left: 8px;">
+                                <option value="stable">Stable</option>
+                                <option value="beta">Beta</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+                
+                <div id="updateAvailable" style="display: none; background: #d4edda; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                    <strong style="color: #155724;">✨ Доступне оновлення: <span id="latestVersion"></span></strong>
+                </div>
+                
+                <div id="updatesList"></div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="section-title">Керування стрімінгом</div>
             
@@ -844,10 +871,112 @@
                 .catch(err => console.error('Failed to load auto-restart settings:', err));
         }
 
+        function checkUpdates() {
+            const channel = document.getElementById('updateChannel').value;
+            
+            fetch(`/api/updates/check?channel=${channel}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Update check failed:', data.error);
+                        return;
+                    }
+                    
+                    document.getElementById('currentVersion').textContent = data.current;
+                    
+                    // Show update card
+                    document.getElementById('updateCard').style.display = 'block';
+                    
+                    // Show update available banner
+                    if (data.has_update) {
+                        document.getElementById('latestVersion').textContent = data.latest;
+                        document.getElementById('updateAvailable').style.display = 'block';
+                    } else {
+                        document.getElementById('updateAvailable').style.display = 'none';
+                    }
+                    
+                    // Build releases list
+                    const updatesList = document.getElementById('updatesList');
+                    updatesList.innerHTML = '';
+                    
+                    if (data.releases && data.releases.length > 0) {
+                        data.releases.forEach(release => {
+                            const isCurrent = release.version === `v${data.current}`;
+                            const releaseDiv = document.createElement('div');
+                            releaseDiv.style.cssText = 'border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 12px;';
+                            
+                            let badge = '';
+                            if (isCurrent) {
+                                badge = '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">ПОТОЧНА</span>';
+                            } else if (release.prerelease) {
+                                badge = '<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">BETA</span>';
+                            }
+                            
+                            releaseDiv.innerHTML = `
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <div>
+                                        <strong>${release.version}</strong>
+                                        ${badge}
+                                    </div>
+                                    <div>
+                                        ${isCurrent ? '' : `<button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="installUpdate('${release.version}')">Оновити</button>`}
+                                    </div>
+                                </div>
+                                ${release.body ? `<div style="font-size: 12px; color: #666; white-space: pre-wrap;">${release.body.substring(0, 200)}${release.body.length > 200 ? '...' : ''}</div>` : ''}
+                            `;
+                            
+                            updatesList.appendChild(releaseDiv);
+                        });
+                    } else {
+                        updatesList.innerHTML = '<p style="color: #666;">Немає доступних оновлень</p>';
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to check updates:', err);
+                });
+        }
+        
+        function installUpdate(version) {
+            if (!confirm(`Ви впевнені, що хочете оновити до версії ${version}?\n\nПроцес займе близько 1-2 хвилин. Веб-інтерфейс буде недоступний під час оновлення.`)) {
+                return;
+            }
+            
+            showAlert('⏳ Оновлення розпочато... Зачекайте 1-2 хвилини.', 'success');
+            
+            fetch('/api/updates/install', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ version: version })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('✅ ' + data.message + ' Сторінка перезавантажиться через 60 секунд.', 'success');
+                    
+                    // Reload page after 60 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 60000);
+                } else {
+                    showAlert('❌ ' + (data.error || 'Помилка оновлення'), 'error');
+                }
+            })
+            .catch(err => {
+                showAlert('❌ Помилка: ' + err.message, 'error');
+            });
+        }
+        
+        // Update channel change handler
+        document.getElementById('updateChannel').addEventListener('change', checkUpdates);
+
         loadConfig();
         updateStatus();
         loadAutorestartSettings();
+        checkUpdates();
         setInterval(updateStatus, 10000);
+        setInterval(checkUpdates, 300000); // Check updates every 5 minutes
     </script>
 </body>
 </html>

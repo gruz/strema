@@ -1,14 +1,16 @@
 #!/bin/bash
 # Installation script for Forpost Stream
 # Installs dependencies and configures systemd service
+#
+# Usage:
+#   Local install (from git clone):  sudo ./install.sh
+#   Remote install (without git):    curl -fsSL https://raw.githubusercontent.com/gruz/strema/main/install.sh | sudo bash
+#   Specific version:                curl -fsSL https://raw.githubusercontent.com/gruz/strema/main/install.sh | sudo bash -s v0.1.0
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SERVICE_NAME="forpost-stream"
-SERVICE_FILE="$SCRIPT_DIR/systemd/forpost-stream.service"
-CONFIG_FILE="$SCRIPT_DIR/config/stream.conf"
-CONFIG_TEMPLATE="$SCRIPT_DIR/config/stream.conf.template"
+GITHUB_REPO="gruz/strema"
+REQUESTED_VERSION="${1:-latest}"
 
 echo "=========================================="
 echo "Installing Forpost Stream"
@@ -19,10 +21,101 @@ ORIGINAL_USER="${SUDO_USER:-$USER}"
 ORIGINAL_UID=$(id -u "$ORIGINAL_USER")
 ORIGINAL_GID=$(id -g "$ORIGINAL_USER")
 
+# Install in user's home directory
+ORIGINAL_HOME=$(eval echo ~$ORIGINAL_USER)
+INSTALL_DIR="$ORIGINAL_HOME/strema"
+
 # Auto-elevate with sudo if not root
 if [ "$EUID" -ne 0 ]; then
     exec sudo "$0" "$@"
 fi
+
+# Detect if running from local directory or remote
+if [ -f "$(dirname "${BASH_SOURCE[0]}")/VERSION" ] || [ -f "$(dirname "${BASH_SOURCE[0]}")/scripts/start_stream.sh" ]; then
+    # Local installation (git clone)
+    echo "📁 Local installation detected"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    LOCAL_INSTALL=true
+else
+    # Remote installation (curl)
+    echo "🌐 Remote installation - downloading from GitHub"
+    LOCAL_INSTALL=false
+    
+    # Determine version to install
+    if [ "$REQUESTED_VERSION" = "latest" ]; then
+        echo "Fetching latest stable release..."
+        RELEASE_INFO=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest")
+        VERSION=$(echo "$RELEASE_INFO" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    else
+        VERSION="$REQUESTED_VERSION"
+    fi
+    
+    if [ -z "$VERSION" ]; then
+        echo "❌ Error: Could not determine version to install"
+        exit 1
+    fi
+    
+    echo "📦 Installing version: $VERSION"
+    
+    # Download release archive
+    ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION.tar.gz"
+    CHECKSUM_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/checksums.txt"
+    
+    echo "Downloading $ARCHIVE_URL..."
+    TMP_DIR=$(mktemp -d)
+    cd "$TMP_DIR"
+    
+    if ! curl -fsSL -o "strema-$VERSION.tar.gz" "$ARCHIVE_URL"; then
+        echo "❌ Error: Failed to download release archive"
+        rm -rf "$TMP_DIR"
+        exit 1
+    fi
+    
+    # Verify checksum
+    echo "Verifying checksum..."
+    if curl -fsSL -o checksums.txt "$CHECKSUM_URL" 2>/dev/null; then
+        if sha256sum -c checksums.txt 2>/dev/null | grep -q "strema-$VERSION.tar.gz: OK"; then
+            echo "✅ Checksum verified"
+        else
+            echo "⚠️  Warning: Checksum verification failed, but continuing..."
+        fi
+    else
+        echo "⚠️  Warning: Could not download checksums, skipping verification"
+    fi
+    
+    # Extract archive
+    echo "Extracting archive..."
+    tar -xzf "strema-$VERSION.tar.gz"
+    
+    # Move to installation directory
+    if [ -d "$INSTALL_DIR" ]; then
+        echo "⚠️  Installation directory exists, backing up config..."
+        if [ -f "$INSTALL_DIR/config/stream.conf" ]; then
+            cp "$INSTALL_DIR/config/stream.conf" "$TMP_DIR/stream.conf.backup"
+        fi
+        rm -rf "$INSTALL_DIR"
+    fi
+    
+    mkdir -p "$(dirname "$INSTALL_DIR")"
+    mv strema "$INSTALL_DIR"
+    
+    # Restore config if backed up
+    if [ -f "$TMP_DIR/stream.conf.backup" ]; then
+        echo "Restoring configuration..."
+        cp "$TMP_DIR/stream.conf.backup" "$INSTALL_DIR/config/stream.conf"
+    fi
+    
+    # Cleanup
+    cd /
+    rm -rf "$TMP_DIR"
+    
+    SCRIPT_DIR="$INSTALL_DIR"
+fi
+
+SERVICE_NAME="forpost-stream"
+SERVICE_FILE="$SCRIPT_DIR/systemd/forpost-stream.service"
+CONFIG_FILE="$SCRIPT_DIR/config/stream.conf"
+CONFIG_TEMPLATE="$SCRIPT_DIR/config/stream.conf.template"
 
 # Install dependencies
 echo ""
@@ -55,8 +148,18 @@ REQUIRED_FILES=(
     "$SCRIPT_DIR/systemd/forpost-stream-watchdog.timer"
     "$SCRIPT_DIR/systemd/forpost-stream-watchdog.service"
     "$SCRIPT_DIR/systemd/forpost-udp-proxy.service"
-    "$SCRIPT_DIR/VERSION"
 )
+
+# VERSION file is optional - will be created by GitHub Action or get_version.sh
+if [ ! -f "$SCRIPT_DIR/VERSION" ] && [ "$LOCAL_INSTALL" = true ]; then
+    echo "⚠️  VERSION file not found, creating from git tag..."
+    if git -C "$SCRIPT_DIR" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' > "$SCRIPT_DIR/VERSION"; then
+        echo "✅ Created VERSION from git tag: $(cat "$SCRIPT_DIR/VERSION")"
+    else
+        echo "unknown" > "$SCRIPT_DIR/VERSION"
+        echo "⚠️  No git tags found, using 'unknown' version"
+    fi
+fi
 
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$file" ]; then

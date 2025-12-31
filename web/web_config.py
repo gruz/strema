@@ -352,5 +352,56 @@ def get_status():
     except Exception as e:
         return jsonify({'status': 'unknown', 'active': False, 'autostart': False, 'autorestart_enabled': False, 'autorestart_interval': 2, 'error': str(e)})
 
+@app.route('/api/updates/check', methods=['GET'])
+def check_updates():
+    """Check for available updates from GitHub."""
+    try:
+        channel = request.args.get('channel', 'stable')
+        script_path = PROJECT_ROOT / 'scripts' / 'check_updates.sh'
+        
+        result = subprocess.run(
+            ['bash', str(script_path), channel],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            import json
+            update_info = json.loads(result.stdout)
+            return jsonify(update_info)
+        else:
+            return jsonify({'error': 'Failed to check updates', 'details': result.stderr}), 500
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Update check timed out'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/updates/install', methods=['POST'])
+def install_update():
+    """Install a specific version."""
+    try:
+        data = request.json
+        version = data.get('version')
+        
+        if not version:
+            return jsonify({'error': 'Version is required'}), 400
+        
+        script_path = PROJECT_ROOT / 'scripts' / 'update.sh'
+        
+        # Run update script in background
+        subprocess.Popen(
+            ['sudo', 'bash', str(script_path), version],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': f'Update to {version} started. Please wait...'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8081, debug=False)
