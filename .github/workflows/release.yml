@@ -65,6 +65,10 @@ jobs:
             --exclude='logs/*.log' \
             --exclude='logs/*.log.old' \
             --exclude='config/stream.conf' \
+            --exclude='VERSION' \
+            --exclude='CHANGELOG.txt' \
+            --exclude='strema-*.tar.gz' \
+            --exclude='checksums.txt' \
             --transform 's,^,strema/,' \
             .
           

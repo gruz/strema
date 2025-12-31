@@ -121,7 +121,7 @@ CONFIG_TEMPLATE="$SCRIPT_DIR/config/stream.conf.template"
 echo ""
 echo "[1/7] Installing dependencies..."
 apt-get update -qq
-apt-get install -y ffmpeg strace python3-flask iproute2
+apt-get install -y ffmpeg strace python3-flask iproute2 jq
 
 # Generate configuration
 echo ""
