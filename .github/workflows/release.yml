@@ -23,7 +23,6 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/v}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          echo "$VERSION" > VERSION
           
           # Determine if this is a pre-release (beta)
           if [[ "$VERSION" == *"beta"* ]] || [[ "$VERSION" == *"alpha"* ]] || [[ "$VERSION" == *"rc"* ]]; then
@@ -46,8 +45,8 @@ jobs:
             CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
           fi
           
-          # Save to file
-          cat > CHANGELOG.txt << EOF
+          # Save to file in /tmp
+          cat > /tmp/CHANGELOG.txt << EOF
           ## What's Changed
           
           $CHANGELOG
@@ -59,18 +58,21 @@ jobs:
       
       - name: Create release archive
         run: |
-          tar -czf strema-${{ steps.version.outputs.tag }}.tar.gz \
+          # Create VERSION file in the repo
+          echo "${{ steps.version.outputs.version }}" > VERSION
+          
+          # Create archive
+          tar -czf /tmp/strema-${{ steps.version.outputs.tag }}.tar.gz \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='logs/*.log' \
             --exclude='logs/*.log.old' \
             --exclude='config/stream.conf' \
-            --exclude='VERSION' \
-            --exclude='CHANGELOG.txt' \
-            --exclude='strema-*.tar.gz' \
-            --exclude='checksums.txt' \
             --transform 's,^,strema/,' \
             .
+          
+          # Move archive to workspace
+          mv /tmp/strema-${{ steps.version.outputs.tag }}.tar.gz .
           
           echo "Created archive: strema-${{ steps.version.outputs.tag }}.tar.gz"
           ls -lh strema-${{ steps.version.outputs.tag }}.tar.gz
@@ -86,8 +88,8 @@ jobs:
           files: |
             strema-${{ steps.version.outputs.tag }}.tar.gz
             checksums.txt
-          body_path: CHANGELOG.txt
-          prerelease: ${{ steps.changelog.outputs.prerelease }}
+          body_path: /tmp/CHANGELOG.txt
+          prerelease: ${{ steps.version.outputs.prerelease }}
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
