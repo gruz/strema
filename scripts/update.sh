@@ -211,6 +211,9 @@ systemctl start forpost-stream-watchdog.timer
 # Restart stream if it was active before update
 if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
     echo "Restarting stream service (was active before update)..."
+    # Give UDP proxy and camera time to fully initialize after graceful shutdown
+    echo "Waiting for services to stabilize..."
+    sleep 5
     systemctl start forpost-stream
 fi
 
