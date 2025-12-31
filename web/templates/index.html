@@ -1019,7 +1019,7 @@
                                 message.textContent = 'Оновлення... Сервер перезапускається...';
                             });
                         
-                        if (attempts > 60) {
+                        if (attempts > 45) {
                             clearInterval(checkInterval);
                             overlay.classList.remove('show');
                             showAlert('⚠️ Оновлення може тривати довше. Перезавантажте сторінку вручну.', 'warning');
