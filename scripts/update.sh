@@ -151,6 +151,16 @@ fi
 if [ -d "$TMP_DIR/git.backup" ]; then
     mv "$TMP_DIR/git.backup" "$INSTALL_DIR/.git"
     echo "✅ Git repository preserved"
+    
+    # Clean up git working directory to avoid uncommitted changes
+    cd "$INSTALL_DIR"
+    if [ -d ".git" ]; then
+        # Reset any tracked files that were modified during update
+        git reset --hard HEAD 2>/dev/null || true
+        # Clean untracked files that match .gitignore
+        git clean -fd 2>/dev/null || true
+        echo "✅ Git working directory cleaned"
+    fi
 fi
 
 # Restore specific config file if backed up separately
