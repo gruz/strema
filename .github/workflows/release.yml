@@ -61,8 +61,10 @@ jobs:
           # Create VERSION file in the repo
           echo "${{ steps.version.outputs.version }}" > VERSION
           
-          # Create archive
+          # Create archive without preserving ownership (set to root:root)
           tar -czf /tmp/strema-${{ steps.version.outputs.tag }}.tar.gz \
+            --owner=0 \
+            --group=0 \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='logs/*.log' \

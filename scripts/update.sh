@@ -118,6 +118,14 @@ echo "Installing new version..."
 mkdir -p "$(dirname "$INSTALL_DIR")"
 mv strema "$INSTALL_DIR"
 
+# Fix ownership to match installation directory owner
+INSTALL_DIR_PARENT=$(dirname "$INSTALL_DIR")
+INSTALL_DIR_OWNER=$(stat -c '%U:%G' "$INSTALL_DIR_PARENT" 2>/dev/null || echo "root:root")
+if [ "$INSTALL_DIR_OWNER" != "root:root" ]; then
+    echo "Setting ownership to $INSTALL_DIR_OWNER..."
+    chown -R "$INSTALL_DIR_OWNER" "$INSTALL_DIR"
+fi
+
 # Restore config and logs
 if [ -d "$TMP_DIR/config.backup" ]; then
     rm -rf "$INSTALL_DIR/config"
