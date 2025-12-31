@@ -387,13 +387,11 @@ def install_update():
         if not version:
             return jsonify({'error': 'Version is required'}), 400
         
-        script_path = PROJECT_ROOT / 'scripts' / 'update.sh'
-        
-        # Run update script in background
-        subprocess.Popen(
-            ['sudo', 'bash', str(script_path), version],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
+        # Use systemd-run to run update in isolated context
+        subprocess.run(
+            ['sudo', 'systemd-run', '--unit=forpost-stream-update', '--no-block',
+             '/bin/bash', str(PROJECT_ROOT / 'scripts' / 'update.sh'), version],
+            check=True
         )
         
         return jsonify({

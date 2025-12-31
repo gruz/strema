@@ -1,0 +1,13 @@
+[Unit]
+Description=FORPOST Stream Update Service
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash __INSTALL_DIR__/scripts/update.sh %i
+RemainAfterExit=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
