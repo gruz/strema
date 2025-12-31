@@ -998,39 +998,16 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    message.textContent = 'Оновлення... Очікування перезапуску сервера...';
+                    message.textContent = 'Оновлення... Зачекайте 35 секунд...';
                     
-                    // Wait 5 seconds for services to stop, then start polling
+                    // Simple approach: wait 35 seconds and reload
+                    // This is more reliable than polling
                     setTimeout(() => {
-                        let attempts = 0;
-                        let serverWentDown = false;
-                        
-                        const checkInterval = setInterval(() => {
-                            attempts++;
-                            
-                            fetch('/api/status', { cache: 'no-cache' })
-                                .then(() => {
-                                    // Server is up
-                                    if (serverWentDown) {
-                                        // Server came back after going down - update complete!
-                                        clearInterval(checkInterval);
-                                        message.textContent = '✅ Оновлення завершено! Перезавантаження...';
-                                        setTimeout(() => location.reload(true), 500);
-                                    }
-                                })
-                                .catch(() => {
-                                    // Server is down - update in progress
-                                    serverWentDown = true;
-                                    message.textContent = 'Оновлення... Сервер перезапускається...';
-                                });
-                            
-                            if (attempts > 40) {
-                                clearInterval(checkInterval);
-                                overlay.classList.remove('show');
-                                showAlert('⚠️ Оновлення може тривати довше. Перезавантажте сторінку вручну.', 'warning');
-                            }
+                        message.textContent = '✅ Оновлення завершено! Перезавантаження...';
+                        setTimeout(() => {
+                            location.reload(true);
                         }, 1000);
-                    }, 5000);
+                    }, 35000);
                 } else {
                     overlay.classList.remove('show');
                     showAlert('❌ ' + (data.error || 'Помилка'), 'error');
