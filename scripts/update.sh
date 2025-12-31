@@ -92,6 +92,13 @@ else
     echo "⚠️  No config to backup"
 fi
 
+# Check if stream was running before stopping
+STREAM_WAS_ACTIVE=false
+if systemctl is-active forpost-stream 2>/dev/null | grep -q "active"; then
+    STREAM_WAS_ACTIVE=true
+    echo "Stream is currently active, will restart after update"
+fi
+
 # Stop services
 echo ""
 echo "Stopping services..."
@@ -104,12 +111,13 @@ echo ""
 echo "Extracting new version..."
 tar -xzf "strema-$REQUESTED_VERSION.tar.gz"
 
-# Remove old installation (except config)
+# Remove old installation (except config, logs, and .git)
 echo "Removing old files..."
 if [ -d "$INSTALL_DIR" ]; then
-    # Keep config and logs
+    # Keep config, logs, and .git directory (for development)
     mv "$INSTALL_DIR/config" "$TMP_DIR/config.backup" 2>/dev/null || true
     mv "$INSTALL_DIR/logs" "$TMP_DIR/logs.backup" 2>/dev/null || true
+    mv "$INSTALL_DIR/.git" "$TMP_DIR/git.backup" 2>/dev/null || true
     rm -rf "$INSTALL_DIR"
 fi
 
@@ -137,6 +145,12 @@ if [ -d "$TMP_DIR/logs.backup" ]; then
     rm -rf "$INSTALL_DIR/logs"
     mv "$TMP_DIR/logs.backup" "$INSTALL_DIR/logs"
     echo "✅ Logs restored"
+fi
+
+# Restore .git directory if it existed (for development)
+if [ -d "$TMP_DIR/git.backup" ]; then
+    mv "$TMP_DIR/git.backup" "$INSTALL_DIR/.git"
+    echo "✅ Git repository preserved"
 fi
 
 # Restore specific config file if backed up separately
@@ -171,9 +185,9 @@ systemctl start forpost-stream-web
 systemctl start forpost-stream-config.path
 systemctl start forpost-stream-watchdog.timer
 
-# Check if stream was running before update
-if systemctl is-enabled forpost-stream 2>/dev/null | grep -q "enabled"; then
-    echo "Restarting stream service (was enabled)..."
+# Restart stream if it was active before update
+if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
+    echo "Restarting stream service (was active before update)..."
     systemctl start forpost-stream
 fi
 
