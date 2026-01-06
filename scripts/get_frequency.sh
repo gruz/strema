@@ -11,6 +11,14 @@ if [ -z "$DZYGA_PID" ]; then
     exit 1
 fi
 
+# Find fd for ttyACM0 dynamically
+TTY_FD=$(ls -la /proc/$DZYGA_PID/fd/ 2>/dev/null | grep ttyACM | awk '{print $9}' | head -1)
+
+if [ -z "$TTY_FD" ]; then
+    echo "ERROR: ttyACM fd not found for dzyga process" >&2
+    exit 1
+fi
+
 RESULT_FILE=$(mktemp)
 trap "rm -f $RESULT_FILE" EXIT
 
@@ -32,18 +40,18 @@ parse_byte() {
     esac
 }
 
-# Sniff via strace fd=4 (ttyACM0)
+# Sniff via strace (ttyACM0)
 timeout 5 strace -f -p "$DZYGA_PID" -e read -s 256 -x 2>&1 | \
-grep -m1 -A2 'read(4, "\\xff", 1)' | \
+grep -m1 -A2 "read($TTY_FD, \"\\\\xff\", 1)" | \
 {
     read -r line1
     read -r line2
     read -r line3
     
     # Check if second read contains \xaa or \xab
-    if echo "$line2" | grep -qE 'read\(4, "\\x(aa|ab)", 1\)'; then
+    if echo "$line2" | grep -qE "read\($TTY_FD, \"\\\\x(aa|ab)\", 1\)"; then
         # Extract content between quotes: read(4, "...", 2)
-        content=$(echo "$line3" | sed -n 's/.*read(4, "\(.*\)", 2).*/\1/p')
+        content=$(echo "$line3" | sed -n "s/.*read($TTY_FD, \"\(.*\)\", 2).*/\1/p")
         
         if [ -n "$content" ]; then
             # Parse bytes
