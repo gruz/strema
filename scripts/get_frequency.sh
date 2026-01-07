@@ -3,6 +3,14 @@
 # Packet: 0xFF 0xAA + 2 bytes frequency
 # Does not interrupt client operation
 
+# Use flock to prevent parallel strace calls (only one strace can attach to process at a time)
+LOCK_FILE="/tmp/get_frequency.lock"
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    echo "ERROR: Another instance is running" >&2
+    exit 1
+fi
+
 # Find dzyga process PID (not dzyga_web)
 DZYGA_PID=$(pgrep -f "/home/rpidrone/FORPOST/dzyga$" | tail -1)
 
@@ -10,6 +18,9 @@ if [ -z "$DZYGA_PID" ]; then
     echo "ERROR: dzyga process not found" >&2
     exit 1
 fi
+
+# Kill stale strace processes (older than 2 sec) - safety net for crashed instances
+pkill -9 -f "strace.*-p $DZYGA_PID" --older 2 2>/dev/null
 
 # Find fd for ttyACM0 dynamically
 TTY_FD=$(ls -la /proc/$DZYGA_PID/fd/ 2>/dev/null | grep ttyACM | awk '{print $9}' | head -1)
@@ -40,8 +51,10 @@ parse_byte() {
     esac
 }
 
-# Sniff via strace (ttyACM0)
-timeout 5 strace -f -p "$DZYGA_PID" -e read -s 256 -x 2>&1 | \
+# Sniff via strace fd=4 (ttyACM0)
+# Note: with -f flag, strace outputs [pid XXXX] prefix, so we need to match that
+# Timeout must be less than update interval (2 sec) to avoid accumulating stale processes
+timeout 1.5 strace -f -p "$DZYGA_PID" -e read -s 256 -x 2>&1 | \
 grep -m1 -A2 "read($TTY_FD, \"\\\\xff\", 1)" | \
 {
     read -r line1
