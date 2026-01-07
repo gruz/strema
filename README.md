@@ -7,7 +7,7 @@
 **Одна команда через SSH:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gruz/strema/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash
 ```
 
 Після встановлення в консолі з'явиться посилання на веб-інтерфейс:
