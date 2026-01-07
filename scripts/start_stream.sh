@@ -35,12 +35,19 @@ source "$CONFIG_FILE"
 # FFmpeg logging level (quiet, panic, fatal, error, warning, info, verbose, debug, trace)
 FFMPEG_LOGLEVEL=${FFMPEG_LOGLEVEL:-info}
 
-RTSP_TRANSPORT=${RTSP_TRANSPORT:-tcp}
-
 # Auto-detect IP address if not set in config
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
     FORPOST_IP=$(ip route get 1 | awk '{print $7; exit}')
     log "Auto-detected IP: $FORPOST_IP"
+fi
+
+# Auto-detect RTSP transport using shared function
+source "$SCRIPT_DIR/detect_rtsp_transport.sh"
+RTSP_TRANSPORT=$(detect_rtsp_transport)
+if [ "$RTSP_TRANSPORT" = "udp" ]; then
+    log "Detected VLC RTSP server - using UDP transport"
+else
+    log "Detected custom RTSP server - using TCP transport"
 fi
 
 # Check for ffmpeg

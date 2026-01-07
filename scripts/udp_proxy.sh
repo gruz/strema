@@ -26,12 +26,20 @@ fi
 
 source "$CONFIG_FILE"
 
-RTSP_TRANSPORT=${RTSP_TRANSPORT:-tcp}
 UDP_PORT=${UDP_PROXY_PORT:-5000}
 
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
     FORPOST_IP=$(ip route get 1 | awk '{print $7; exit}')
     log "Auto-detected IP: $FORPOST_IP"
+fi
+
+# Auto-detect RTSP transport using shared function
+source "$SCRIPT_DIR/detect_rtsp_transport.sh"
+RTSP_TRANSPORT=$(detect_rtsp_transport)
+if [ "$RTSP_TRANSPORT" = "udp" ]; then
+    log "Detected VLC RTSP server - using UDP transport"
+else
+    log "Detected custom RTSP server - using TCP transport"
 fi
 
 if ! command -v ffmpeg &> /dev/null; then
