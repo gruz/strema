@@ -71,27 +71,36 @@ if [ "$CLOSE_WAIT_COUNT" -gt 0 ]; then
         exit 1
     fi
 else
+    # Check UDP proxy service status first
+    UDP_PROXY_ACTIVE=$(systemctl is-active forpost-udp-proxy 2>/dev/null)
+    
     # Check if ffmpeg process is actually consuming CPU (should be encoding)
     CPU_USAGE=$(top -b -n 1 -p "$ACTUAL_FFMPEG_PID" 2>/dev/null | tail -1 | awk '{print $9}' | cut -d. -f1)
     
     if [ -n "$CPU_USAGE" ] && [ "$CPU_USAGE" -lt 1 ]; then
-        log "WARNING: ffmpeg process (PID $ACTUAL_FFMPEG_PID) has low CPU usage ($CPU_USAGE%), may be stalled"
-        
-        # Check if process has been running for more than 5 minutes with low CPU
-        PROCESS_AGE=$(ps -p "$ACTUAL_FFMPEG_PID" -o etimes= 2>/dev/null | tr -d ' ')
-        if [ -n "$PROCESS_AGE" ] && [ "$PROCESS_AGE" -gt 300 ]; then
-            log "ACTION: Process running for ${PROCESS_AGE}s with low CPU, restarting service..."
-            systemctl restart "$SERVICE_NAME"
+        if [ "$UDP_PROXY_ACTIVE" = "active" ]; then
+            # UDP proxy is running but ffmpeg has low CPU - this indicates a problem
+            log "WARNING: ffmpeg process (PID $ACTUAL_FFMPEG_PID) has low CPU usage ($CPU_USAGE%) with active UDP proxy, may be stalled"
             
-            if [ $? -eq 0 ]; then
-                log "SUCCESS: Service restarted successfully"
-            else
-                log "ERROR: Failed to restart service"
-                exit 1
+            # Check if process has been running for more than 1 minute with low CPU
+            PROCESS_AGE=$(ps -p "$ACTUAL_FFMPEG_PID" -o etimes= 2>/dev/null | tr -d ' ')
+            if [ -n "$PROCESS_AGE" ] && [ "$PROCESS_AGE" -gt 60 ]; then
+                log "ACTION: Process running for ${PROCESS_AGE}s with low CPU despite active UDP proxy, restarting service..."
+                systemctl restart "$SERVICE_NAME"
+                
+                if [ $? -eq 0 ]; then
+                    log "SUCCESS: Service restarted successfully"
+                else
+                    log "ERROR: Failed to restart service"
+                    exit 1
+                fi
             fi
+        else
+            # UDP proxy is not running - low CPU is expected
+            log "INFO: ffmpeg has low CPU usage ($CPU_USAGE%) but UDP proxy is inactive - this is normal"
         fi
     else
-        log "OK: Service healthy (ffmpeg PID $ACTUAL_FFMPEG_PID, CPU ${CPU_USAGE}%)"
+        log "OK: Service healthy (ffmpeg PID $ACTUAL_FFMPEG_PID, CPU ${CPU_USAGE}%, UDP proxy: $UDP_PROXY_ACTIVE)"
     fi
 fi
 
