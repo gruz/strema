@@ -251,6 +251,7 @@ while true; do
                 $INPUT_PARAMS \
                 -vf "$VF_FILTER" \
                 -c:v libx264 -preset ultrafast -tune zerolatency \
+                -bf 0 -pix_fmt yuv420p \
                 -crf ${VIDEO_CRF} -g ${VIDEO_GOP} \
                 -an -f flv "$RTMP_URL" &
         else
