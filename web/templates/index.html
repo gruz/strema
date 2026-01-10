@@ -1590,7 +1590,11 @@
                     // Update current state display
                     document.getElementById('currentWifiState').textContent = current.wifi_blocked ? '❌ Вимкнено' : '✅ Увімкнено';
                     document.getElementById('currentBluetoothState').textContent = current.bluetooth_blocked ? '❌ Вимкнено' : '✅ Увімкнено';
-                    document.getElementById('currentHdmiState').textContent = current.hdmi_on ? '✅ Увімкнено' : '❌ Вимкнено';
+                    if (current.hdmi_supported === false) {
+                        document.getElementById('currentHdmiState').innerHTML = '⚠️ <span style="color: #856404;">Не підтримується</span>';
+                    } else {
+                        document.getElementById('currentHdmiState').textContent = current.hdmi_on ? '✅ Увімкнено' : '❌ Вимкнено';
+                    }
                     
                     let ethStateText = current.eth_speed + 'Mbps';
                     if (current.eth_autoneg === 'on') {

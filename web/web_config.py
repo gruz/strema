@@ -476,10 +476,15 @@ def get_power_settings():
         except:
             pass
         
+        hdmi_supported = True
         try:
             result = subprocess.run(['vcgencmd', 'display_power'], capture_output=True, text=True)
             hdmi_on = 'display_power=1' in result.stdout
+            # Check if HDMI control actually works by comparing with config
+            if config.get('POWER_SAVE_HDMI') == 'true' and hdmi_on:
+                hdmi_supported = False
         except:
+            hdmi_supported = False
             pass
         
         try:
@@ -507,6 +512,7 @@ def get_power_settings():
                 'wifi_blocked': wifi_blocked,
                 'bluetooth_blocked': bluetooth_blocked,
                 'hdmi_on': hdmi_on,
+                'hdmi_supported': hdmi_supported,
                 'eth_speed': eth_speed,
                 'eth_autoneg': eth_autoneg
             }

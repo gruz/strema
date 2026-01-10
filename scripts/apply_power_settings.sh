@@ -61,15 +61,24 @@ fi
 if [ "$POWER_SAVE_HDMI" = "true" ]; then
     log "Disabling HDMI output..."
     vcgencmd display_power 0 2>/dev/null
-    if [ $? -eq 0 ]; then
+    # Verify if HDMI was actually disabled
+    sleep 0.5
+    HDMI_STATE=$(vcgencmd display_power 2>/dev/null | grep -o "display_power=[0-9]" | cut -d= -f2)
+    if [ "$HDMI_STATE" = "0" ]; then
         log "  HDMI disabled successfully"
     else
-        log "  WARNING: Failed to disable HDMI"
+        log "  WARNING: HDMI control not supported on this device"
     fi
 else
     log "Enabling HDMI output..."
     vcgencmd display_power 1 2>/dev/null
-    log "  HDMI enabled"
+    sleep 0.5
+    HDMI_STATE=$(vcgencmd display_power 2>/dev/null | grep -o "display_power=[0-9]" | cut -d= -f2)
+    if [ "$HDMI_STATE" = "1" ]; then
+        log "  HDMI enabled successfully"
+    else
+        log "  WARNING: HDMI control not supported on this device"
+    fi
 fi
 
 # Ethernet speed control
