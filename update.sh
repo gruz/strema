@@ -6,6 +6,11 @@ set -e  # Exit on error
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Auto-elevate with sudo if not root
+if [ "$EUID" -ne 0 ]; then
+    exec sudo -E "$0" "$@"
+fi
+
 echo "=========================================="
 echo "Updating Forpost Stream"
 echo "=========================================="
@@ -39,7 +44,7 @@ echo ""
 
 # Step 3: Run install script
 echo "[3/5] Running install script..."
-sudo ./install.sh 2>&1 | grep -v "^\[" || true
+./install.sh 2>&1 | grep -v "^\[" || true
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
     echo "ERROR: install.sh failed"
     exit 1
@@ -49,7 +54,7 @@ echo ""
 
 # Step 4: Restart web interface
 echo "[4/5] Restarting web interface..."
-sudo systemctl restart forpost-stream-web
+systemctl restart forpost-stream-web
 if [ $? -eq 0 ]; then
     echo "✓ Web interface restarted"
 else
