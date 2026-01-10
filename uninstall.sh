@@ -11,6 +11,9 @@ fi
 echo "Removing Forpost Stream services..."
 
 # Source service manager for centralized service handling
+if [ ! -f "$SCRIPT_DIR/scripts/service_manager.sh" ] && [ -f "$SCRIPT_DIR/scripts/service_manager.sh.template" ]; then
+    cp "$SCRIPT_DIR/scripts/service_manager.sh.template" "$SCRIPT_DIR/scripts/service_manager.sh"
+fi
 source "$SCRIPT_DIR/scripts/service_manager.sh"
 uninstall_all_services "$SCRIPT_DIR"
 

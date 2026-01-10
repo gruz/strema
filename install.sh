@@ -129,9 +129,20 @@ echo "[2/7] Configuring..."
 
 echo "Configuration will be created on first visit in the web UI."
 
+# Generate service_manager.sh from template
+echo ""
+echo "[3/7] Generating service manager..."
+if [ -f "$SCRIPT_DIR/scripts/service_manager.sh.template" ]; then
+    cp "$SCRIPT_DIR/scripts/service_manager.sh.template" "$SCRIPT_DIR/scripts/service_manager.sh"
+    echo "✅ Service manager generated from template"
+else
+    echo "❌ Error: service_manager.sh.template not found"
+    exit 1
+fi
+
 # Check required files
 echo ""
-echo "[3/7] Checking files..."
+echo "[4/7] Checking files..."
 REQUIRED_FILES=(
     "$SCRIPT_DIR/scripts/start_stream.sh"
     "$SCRIPT_DIR/scripts/get_frequency.sh"
@@ -189,13 +200,13 @@ echo "All files in place."
 
 # Install systemd service
 echo ""
-echo "[4/7] Installing systemd services..."
+echo "[5/7] Installing systemd services..."
 source "$SCRIPT_DIR/scripts/service_manager.sh"
 install_all_services "$SCRIPT_DIR"
 
 # Enable and start services
 echo ""
-echo "[5/7] Enabling services..."
+echo "[6/7] Enabling services..."
 enable_services
 echo "Power settings service enabled (will apply on boot)"
 
@@ -204,7 +215,7 @@ echo "=========================================="
 echo "Installation complete!"
 echo "=========================================="
 echo ""
-echo "[6/7] Getting network information..."
+echo "[7/7] Getting network information..."
 IP_ADDRESS=$(echo "${SSH_CONNECTION:-}" | awk '{print $3}')
 if [ -z "$IP_ADDRESS" ]; then
     IP_ADDRESS=$(hostname -I | awk '{print $1}')
@@ -227,6 +238,6 @@ echo "  Logs:       sudo journalctl -u $SERVICE_NAME -f"
 echo "  Stream log: tail -f $SCRIPT_DIR/logs/stream.log"
 echo "  Watchdog:   tail -f $SCRIPT_DIR/logs/watchdog.log"
 echo ""
-echo "[7/7] Watchdog enabled - monitors stream health every 2 minutes"
+echo "Watchdog enabled - monitors stream health every 2 minutes"
 echo "Configuration will be created in the web UI: $SCRIPT_DIR/config/stream.conf"
 echo ""

@@ -29,6 +29,9 @@ echo ""
 
 # Step 2: Check service status BEFORE install
 echo "[2/5] Checking service status..."
+if [ ! -f "$SCRIPT_DIR/scripts/service_manager.sh" ] && [ -f "$SCRIPT_DIR/scripts/service_manager.sh.template" ]; then
+    cp "$SCRIPT_DIR/scripts/service_manager.sh.template" "$SCRIPT_DIR/scripts/service_manager.sh"
+fi
 source "$SCRIPT_DIR/scripts/service_manager.sh"
 ACTIVE_SERVICES=$(get_active_services)
 echo "Active services: ${ACTIVE_SERVICES:-none}"
