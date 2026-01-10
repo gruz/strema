@@ -38,6 +38,27 @@ OVERLAY_TEXT="__OVERLAY_TEXT__"
 # Overlay text position (top-left, top-right, bottom-left, bottom-right)
 OVERLAY_POSITION=top-left
 
+# Static overlay font size
+OVERLAY_FONTSIZE_CUSTOM=20
+
+# Static overlay text color (white, yellow, red, green, blue, etc.)
+OVERLAY_TEXT_COLOR=white
+
+# Static overlay text opacity (0.0 - 1.0)
+OVERLAY_TEXT_OPACITY_CUSTOM=1.0
+
+# Static overlay border width (0 = use background box)
+OVERLAY_BORDER_WIDTH=0
+
+# Static overlay border color (when border width > 0)
+OVERLAY_BORDER_COLOR=black
+
+# Static overlay background color (when border width = 0)
+OVERLAY_BG_COLOR=black
+
+# Static overlay background opacity (0.0 - 1.0, when border width = 0)
+OVERLAY_BG_OPACITY_CUSTOM=0.5
+
 # Show current frequency (true/false)
 # Frequency updates every 2 seconds
 # WARNING: Frequency display significantly increases CPU usage! Use carefully.
@@ -45,6 +66,27 @@ SHOW_FREQUENCY=true
 
 # Frequency display position (top-left, top-right, bottom-left, bottom-right)
 FREQUENCY_POSITION=top-right
+
+# Frequency display font size
+FREQUENCY_FONTSIZE=20
+
+# Frequency display text color (white, yellow, red, green, blue, etc.)
+FREQUENCY_TEXT_COLOR=yellow
+
+# Frequency display text opacity (0.0 - 1.0)
+FREQUENCY_TEXT_OPACITY=1.0
+
+# Frequency display border width (0 = use background box)
+FREQUENCY_BORDER_WIDTH=0
+
+# Frequency display border color (when border width > 0)
+FREQUENCY_BORDER_COLOR=black
+
+# Frequency display background color (when border width = 0)
+FREQUENCY_BG_COLOR=black
+
+# Frequency display background opacity (0.0 - 1.0, when border width = 0)
+FREQUENCY_BG_OPACITY=0.5
 
 # Auto-restart stream periodically (true/false)
 # Helps prevent stream freezing or connection issues
@@ -66,3 +108,36 @@ UDP_PROXY_PORT=5000
 # - on-lock: Stream only when scanner is locked on frequency (pauses during scanning)
 # - overlay: Stream continuously but show "SCANNING..." indicator during scanning
 STREAM_MODE=always
+
+# Overlay enabled (master switch for encoding vs copy)
+# When true: uses encoding with overlays (higher CPU)
+# When false: uses stream copy (lower CPU, no overlays)
+OVERLAY_ENABLED=true
+
+# Dynamic overlay settings
+# Enable dynamic overlay (text that can be updated without restarting stream)
+DYNAMIC_OVERLAY_ENABLED=false
+
+# Dynamic overlay position (top-left, top-right, bottom-left, bottom-right)
+DYNAMIC_OVERLAY_POSITION=bottom-left
+
+# Dynamic overlay font size
+DYNAMIC_OVERLAY_FONTSIZE=20
+
+# Dynamic overlay text color (white, yellow, red, green, blue, etc.)
+DYNAMIC_OVERLAY_TEXT_COLOR=white
+
+# Dynamic overlay text opacity (0.0 = transparent, 1.0 = opaque)
+DYNAMIC_OVERLAY_TEXT_OPACITY=1.0
+
+# Dynamic overlay background color (black, white, red, etc.)
+DYNAMIC_OVERLAY_BG_COLOR=black
+
+# Dynamic overlay background opacity (0.0 = transparent, 1.0 = opaque)
+DYNAMIC_OVERLAY_BG_OPACITY=0.5
+
+# Dynamic overlay border width (0 = no border, use border instead of background)
+DYNAMIC_OVERLAY_BORDER_WIDTH=0
+
+# Dynamic overlay border color (for readable text on any background)
+DYNAMIC_OVERLAY_BORDER_COLOR=black
