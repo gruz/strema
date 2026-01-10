@@ -475,8 +475,13 @@ def set_dynamic_overlay():
             )
             if result.returncode == 0:
                 current_freq = result.stdout.strip()
-                last_freq_file.write_text(current_freq)
-                last_freq_file.chmod(0o666)
+                # Write via sudo to avoid permission conflicts with update_dynamic_overlay.sh
+                subprocess.run(
+                    ['sudo', 'tee', str(last_freq_file)],
+                    input=current_freq.encode(),
+                    capture_output=True
+                )
+                subprocess.run(['sudo', 'chmod', '666', str(last_freq_file)], capture_output=True)
         except:
             pass
         

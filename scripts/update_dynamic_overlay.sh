@@ -80,11 +80,11 @@ while true; do
     if [ $freq_diff -gt $FREQ_THRESHOLD ]; then
         # Frequency changed - we are scanning
         last_change_time=$current_time
-        echo "scanning" | tee "$SCANNING_STATE_FILE" > /dev/null
+        echo "scanning" > "$SCANNING_STATE_FILE"
         chmod 666 "$SCANNING_STATE_FILE" 2>/dev/null || true
         
         # Clear dynamic text when scanning starts
-        echo "" | tee "$DYNAMIC_TEXT_FILE" > /dev/null
+        echo "" > "$DYNAMIC_TEXT_FILE"
         chmod 666 "$DYNAMIC_TEXT_FILE" 2>/dev/null || true
     else
         # Frequency stable - check if enough time passed to consider stopped
@@ -92,12 +92,12 @@ while true; do
         
         if [ $time_since_change -ge $STABLE_TIME ]; then
             # Frequency has been stable for STABLE_TIME seconds
-            echo "stable" | tee "$SCANNING_STATE_FILE" > /dev/null
+            echo "stable" > "$SCANNING_STATE_FILE"
             chmod 666 "$SCANNING_STATE_FILE" 2>/dev/null || true
         fi
     fi
     
     # Always update last frequency to current
-    echo "$current_freq" | tee "$LAST_FREQ_FILE" > /dev/null
+    echo "$current_freq" > "$LAST_FREQ_FILE"
     chmod 666 "$LAST_FREQ_FILE" 2>/dev/null || true
 done
