@@ -24,7 +24,7 @@ fi
 
 # Step 1: Pull latest changes
 echo "[1/5] Pulling latest changes from git..."
-git pull
+if [ -n "$SUDO_USER" ]; then sudo -u "$SUDO_USER" git pull; else git pull; fi
 if [ $? -ne 0 ]; then
     echo "ERROR: git pull failed"
     exit 1
