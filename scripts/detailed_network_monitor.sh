@@ -10,11 +10,16 @@ DETAIL_LOG="$PROJECT_ROOT/logs/network_detail.log"
 MAX_LOG_SIZE=10485760  # 10MB
 
 # Load configuration
+# Load default values first
+DEFAULTS_FILE="$(dirname "$0")/../config/defaults.conf"
+if [ -f "$DEFAULTS_FILE" ]; then
+    source "$DEFAULTS_FILE"
+fi
+
+# Load configuration (overrides defaults)
 if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
-
-RTSP_PORT=${RTSP_PORT:-8554}
 
 # Auto-detect IP if needed
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then

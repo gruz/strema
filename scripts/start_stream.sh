@@ -29,11 +29,16 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Load configuration
+# Load default values first
+DEFAULTS_FILE="$(dirname "$0")/../config/defaults.conf"
+if [ -f "$DEFAULTS_FILE" ]; then
+    source "$DEFAULTS_FILE"
+fi
+
+# Load configuration (overrides defaults)
 source "$CONFIG_FILE"
 
-# FFmpeg logging level (quiet, panic, fatal, error, warning, info, verbose, debug, trace)
-FFMPEG_LOGLEVEL=${FFMPEG_LOGLEVEL:-info}
+# FFmpeg logging level is now loaded from defaults.conf
 
 # Auto-detect IP address if not set in config
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
@@ -59,9 +64,7 @@ fi
 # Build RTSP URL
 RTSP_URL="rtsp://${FORPOST_IP}:${RTSP_PORT}/${VIDEO_DEVICE}"
 
-# UDP Proxy settings (if enabled, read from UDP instead of RTSP)
-USE_UDP_PROXY=${USE_UDP_PROXY:-true}
-UDP_PROXY_PORT=${UDP_PROXY_PORT:-5000}
+# UDP Proxy settings (loaded from defaults.conf)
 if [ "$USE_UDP_PROXY" = "true" ]; then
     # Small buffer to prevent lag accumulation - old packets are dropped
     INPUT_URL="udp://127.0.0.1:${UDP_PROXY_PORT}?overrun_nonfatal=1&fifo_size=65536&buffer_size=131072&listen=0"
@@ -96,7 +99,7 @@ DYNAMIC_OVERLAY_UPDATER="$SCRIPT_DIR/update_dynamic_overlay.sh"
 # Function to check if we should stream based on scan state
 # $1 - threshold: 1=fast/sensitive (for initial check), 2=tolerant (for monitoring)
 should_stream() {
-    local threshold=${1:-1}
+    local threshold=${1}
     
     # In overlay mode, always stream (scanning indicator shown in overlay)
     # In always mode, always stream (ignore scanning)
@@ -143,11 +146,11 @@ get_position_coords() {
             ;;
         "bottom-left")
             x_coord="10"
-            y_coord="(h-text_h-10)"
+            y_coord="(h-text_h-60)"
             ;;
         "bottom-right")
             x_coord="(w-text_w-10)"
-            y_coord="(h-text_h-10)"
+            y_coord="(h-text_h-60)"
             ;;
         *)
             x_coord="10"
@@ -170,7 +173,7 @@ create_drawtext_filter() {
     local border_color=$7
     local bg_color=$8
     local bg_opacity=$9
-    local is_file=${10:-false}
+    local is_file=${10}
     
     local coords=$(get_position_coords "$position")
     local x_coord="${coords%:*}"
@@ -190,13 +193,6 @@ create_drawtext_filter() {
         echo "drawtext=${text_param}:fontsize=${fontsize}:fontcolor=${color}@${text_opacity}:box=1:boxcolor=${bg_color}@${bg_opacity}:boxborderw=5:x=${x_coord}:y=${y_coord}"
     fi
 }
-
-# Set default values
-VIDEO_CRF=${VIDEO_CRF:-30}
-VIDEO_FPS=${VIDEO_FPS:-25}
-OVERLAY_POSITION=${OVERLAY_POSITION:-top-left}
-FREQUENCY_POSITION=${FREQUENCY_POSITION:-bottom-left}
-STREAM_MODE=${STREAM_MODE:-always}
 
 # Overlay enabled (master switch for encoding vs copy)
 OVERLAY_ENABLED=${OVERLAY_ENABLED:-true}

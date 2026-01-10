@@ -948,13 +948,13 @@
 
         function updateOverlayUI(config) {
             // Show/hide overlay options section based on OVERLAY_ENABLED
-            const overlayEnabled = (config.OVERLAY_ENABLED || 'false') === 'true';
+            const overlayEnabled = config.OVERLAY_ENABLED === 'true';
             const overlayOptionsSection = document.getElementById('overlayOptionsSection');
             if (overlayOptionsSection) {
                 overlayOptionsSection.style.display = overlayEnabled ? 'block' : 'none';
             }
             
-            const borderWidth = parseInt(config.DYNAMIC_OVERLAY_BORDER_WIDTH || '0');
+            const borderWidth = parseInt(config.DYNAMIC_OVERLAY_BORDER_WIDTH);
             const bgGroup = document.getElementById('dynamicBgGroup');
             const borderGroup = document.getElementById('dynamicBorderGroup');
             if (bgGroup && borderGroup) {
@@ -1568,8 +1568,8 @@
                     document.getElementById('powerSaveBluetooth').checked = config.POWER_SAVE_BLUETOOTH === 'true';
                     
                     // Update Ethernet speed
-                    const ethSpeed = config.POWER_SAVE_ETH_SPEED || 'auto';
-                    const ethAutoneg = config.POWER_SAVE_ETH_AUTONEG || 'on';
+                    const ethSpeed = config.POWER_SAVE_ETH_SPEED;
+                    const ethAutoneg = config.POWER_SAVE_ETH_AUTONEG;
                     let speedValue = 'auto';
                     if (ethSpeed === '100' && ethAutoneg === 'off') {
                         speedValue = '100';

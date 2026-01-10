@@ -11,16 +11,16 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
-# Load configuration
+# Load default values first
+DEFAULTS_FILE="$(dirname "$0")/../config/defaults.conf"
+if [ -f "$DEFAULTS_FILE" ]; then
+    source "$DEFAULTS_FILE"
+fi
+
+# Load configuration (overrides defaults)
 if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
 fi
-
-# Power saving settings with defaults
-POWER_SAVE_WIFI=${POWER_SAVE_WIFI:-false}
-POWER_SAVE_BLUETOOTH=${POWER_SAVE_BLUETOOTH:-false}
-POWER_SAVE_ETH_SPEED=${POWER_SAVE_ETH_SPEED:-auto}
-POWER_SAVE_ETH_AUTONEG=${POWER_SAVE_ETH_AUTONEG:-on}
 
 log "=========================================="
 log "Applying power saving settings"

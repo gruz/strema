@@ -11,6 +11,7 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent
 CONFIG_FILE = PROJECT_ROOT / 'config' / 'stream.conf'
 CONFIG_TEMPLATE = PROJECT_ROOT / 'config' / 'stream.conf.template'
+DEFAULTS_FILE = PROJECT_ROOT / 'config' / 'defaults.conf'
 VERSION_FILE = PROJECT_ROOT / 'VERSION'
 
 def get_version():
@@ -30,6 +31,29 @@ def is_config_ready(config: dict) -> bool:
     if '__RTMP_URL__' in rtmp:
         return False
     return True
+
+def parse_defaults():
+    """Parse default values from defaults.conf file."""
+    defaults = {}
+    
+    if not DEFAULTS_FILE.exists():
+        return defaults
+    
+    with open(DEFAULTS_FILE, 'r') as f:
+        for line in f:
+            line_stripped = line.strip()
+            if line_stripped and not line_stripped.startswith('#') and '=' in line_stripped:
+                key, value = line_stripped.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                
+                # Remove quotes if present
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                
+                defaults[key] = value
+    
+    return defaults
 
 def parse_config():
     """Parse configuration file into a dictionary."""
@@ -70,6 +94,12 @@ def parse_config():
                 current_comment = []
         elif not line_stripped:
             current_comment = []
+    
+    # Apply default values for missing configuration parameters
+    defaults = parse_defaults()
+    for key, default_value in defaults.items():
+        if key not in config:
+            config[key] = default_value
     
     return config, comments
 

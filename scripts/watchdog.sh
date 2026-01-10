@@ -41,12 +41,18 @@ restart_service() {
 }
 
 check_udp_proxy_enabled() {
-    local use_proxy="true"
+    # Load default values first
+    local defaults_file="$(dirname "$0")/../config/defaults.conf"
+    if [ -f "$defaults_file" ]; then
+        source "$defaults_file"
+    fi
+    
+    # Load configuration (overrides defaults)
     if [ -f "$CONFIG_FILE" ]; then
         source "$CONFIG_FILE"
-        use_proxy=${USE_UDP_PROXY:-true}
     fi
-    [ "$use_proxy" = "true" ]
+    
+    [ "$USE_UDP_PROXY" = "true" ]
 }
 
 # Check for H.264 decode errors in stream log

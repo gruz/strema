@@ -12,11 +12,14 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-source "$CONFIG_FILE"
+# Load default values first
+DEFAULTS_FILE="$(dirname "$0")/../config/defaults.conf"
+if [ -f "$DEFAULTS_FILE" ]; then
+    source "$DEFAULTS_FILE"
+fi
 
-# Default values
-AUTO_RESTART_ENABLED=${AUTO_RESTART_ENABLED:-false}
-AUTO_RESTART_INTERVAL=${AUTO_RESTART_INTERVAL:-2}
+# Load configuration (overrides defaults)
+source "$CONFIG_FILE"
 
 # Update timer file with new interval
 cat > "$TIMER_FILE" << EOF
