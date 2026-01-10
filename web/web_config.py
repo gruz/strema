@@ -463,7 +463,6 @@ def get_power_settings():
         # Get current system state
         wifi_blocked = False
         bluetooth_blocked = False
-        hdmi_on = True
         eth_speed = 'auto'
         eth_autoneg = 'on'
         
@@ -476,16 +475,6 @@ def get_power_settings():
         except:
             pass
         
-        hdmi_supported = True
-        try:
-            result = subprocess.run(['vcgencmd', 'display_power'], capture_output=True, text=True)
-            hdmi_on = 'display_power=1' in result.stdout
-            # Check if HDMI control actually works by comparing with config
-            if config.get('POWER_SAVE_HDMI') == 'true' and hdmi_on:
-                hdmi_supported = False
-        except:
-            hdmi_supported = False
-            pass
         
         try:
             result = subprocess.run(['ethtool', 'eth0'], capture_output=True, text=True)
@@ -504,15 +493,12 @@ def get_power_settings():
             'config': {
                 'POWER_SAVE_WIFI': config.get('POWER_SAVE_WIFI', 'false'),
                 'POWER_SAVE_BLUETOOTH': config.get('POWER_SAVE_BLUETOOTH', 'false'),
-                'POWER_SAVE_HDMI': config.get('POWER_SAVE_HDMI', 'false'),
                 'POWER_SAVE_ETH_SPEED': config.get('POWER_SAVE_ETH_SPEED', 'auto'),
                 'POWER_SAVE_ETH_AUTONEG': config.get('POWER_SAVE_ETH_AUTONEG', 'on')
             },
             'current': {
                 'wifi_blocked': wifi_blocked,
                 'bluetooth_blocked': bluetooth_blocked,
-                'hdmi_on': hdmi_on,
-                'hdmi_supported': hdmi_supported,
                 'eth_speed': eth_speed,
                 'eth_autoneg': eth_autoneg
             }

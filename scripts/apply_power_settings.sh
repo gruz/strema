@@ -19,7 +19,6 @@ fi
 # Power saving settings with defaults
 POWER_SAVE_WIFI=${POWER_SAVE_WIFI:-false}
 POWER_SAVE_BLUETOOTH=${POWER_SAVE_BLUETOOTH:-false}
-POWER_SAVE_HDMI=${POWER_SAVE_HDMI:-false}
 POWER_SAVE_ETH_SPEED=${POWER_SAVE_ETH_SPEED:-auto}
 POWER_SAVE_ETH_AUTONEG=${POWER_SAVE_ETH_AUTONEG:-on}
 
@@ -55,30 +54,6 @@ else
     log "Enabling Bluetooth..."
     rfkill unblock bluetooth 2>/dev/null
     log "  Bluetooth enabled"
-fi
-
-# HDMI control
-if [ "$POWER_SAVE_HDMI" = "true" ]; then
-    log "Disabling HDMI output..."
-    vcgencmd display_power 0 2>/dev/null
-    # Verify if HDMI was actually disabled
-    sleep 0.5
-    HDMI_STATE=$(vcgencmd display_power 2>/dev/null | grep -o "display_power=[0-9]" | cut -d= -f2)
-    if [ "$HDMI_STATE" = "0" ]; then
-        log "  HDMI disabled successfully"
-    else
-        log "  WARNING: HDMI control not supported on this device"
-    fi
-else
-    log "Enabling HDMI output..."
-    vcgencmd display_power 1 2>/dev/null
-    sleep 0.5
-    HDMI_STATE=$(vcgencmd display_power 2>/dev/null | grep -o "display_power=[0-9]" | cut -d= -f2)
-    if [ "$HDMI_STATE" = "1" ]; then
-        log "  HDMI enabled successfully"
-    else
-        log "  WARNING: HDMI control not supported on this device"
-    fi
 fi
 
 # Ethernet speed control

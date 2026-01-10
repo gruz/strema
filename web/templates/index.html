@@ -390,13 +390,6 @@
                     <span class="help-text">Економія ~0.5W. Вимикайте, якщо Bluetooth не використовується.</span>
                 </div>
 
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="powerSaveHdmi" style="width: auto; margin-right: 8px;">
-                        Вимкнути HDMI
-                    </label>
-                    <span class="help-text">Економія ~1W. Вимикайте, якщо монітор не підключений.</span>
-                </div>
 
                 <div class="form-group">
                     <label for="powerSaveEthSpeed">Швидкість Ethernet</label>
@@ -413,7 +406,6 @@
                     <div style="margin-top: 8px; font-size: 13px; color: #0c5460;">
                         <div>WiFi: <span id="currentWifiState">...</span></div>
                         <div>Bluetooth: <span id="currentBluetoothState">...</span></div>
-                        <div>HDMI: <span id="currentHdmiState">...</span></div>
                         <div>Ethernet: <span id="currentEthState">...</span></div>
                     </div>
                 </div>
@@ -1574,7 +1566,6 @@
                     // Update checkboxes
                     document.getElementById('powerSaveWifi').checked = config.POWER_SAVE_WIFI === 'true';
                     document.getElementById('powerSaveBluetooth').checked = config.POWER_SAVE_BLUETOOTH === 'true';
-                    document.getElementById('powerSaveHdmi').checked = config.POWER_SAVE_HDMI === 'true';
                     
                     // Update Ethernet speed
                     const ethSpeed = config.POWER_SAVE_ETH_SPEED || 'auto';
@@ -1588,13 +1579,8 @@
                     document.getElementById('powerSaveEthSpeed').value = speedValue;
                     
                     // Update current state display
-                    document.getElementById('currentWifiState').textContent = current.wifi_blocked ? '❌ Вимкнено' : '✅ Увімкнено';
-                    document.getElementById('currentBluetoothState').textContent = current.bluetooth_blocked ? '❌ Вимкнено' : '✅ Увімкнено';
-                    if (current.hdmi_supported === false) {
-                        document.getElementById('currentHdmiState').innerHTML = '⚠️ <span style="color: #856404;">Не підтримується</span>';
-                    } else {
-                        document.getElementById('currentHdmiState').textContent = current.hdmi_on ? '✅ Увімкнено' : '❌ Вимкнено';
-                    }
+                    document.getElementById('currentWifiState').textContent = current.wifi_blocked ? '✅ Вимкнено' : '❌ Увімкнено';
+                    document.getElementById('currentBluetoothState').textContent = current.bluetooth_blocked ? '✅ Вимкнено' : '❌ Увімкнено';
                     
                     let ethStateText = current.eth_speed + 'Mbps';
                     if (current.eth_autoneg === 'on') {
@@ -1613,7 +1599,6 @@
         function applyPowerSettings() {
             const wifi = document.getElementById('powerSaveWifi').checked;
             const bluetooth = document.getElementById('powerSaveBluetooth').checked;
-            const hdmi = document.getElementById('powerSaveHdmi').checked;
             const ethSpeed = document.getElementById('powerSaveEthSpeed').value;
             
             let ethSpeedValue = 'auto';
@@ -1630,7 +1615,6 @@
             const data = {
                 POWER_SAVE_WIFI: wifi ? 'true' : 'false',
                 POWER_SAVE_BLUETOOTH: bluetooth ? 'true' : 'false',
-                POWER_SAVE_HDMI: hdmi ? 'true' : 'false',
                 POWER_SAVE_ETH_SPEED: ethSpeedValue,
                 POWER_SAVE_ETH_AUTONEG: ethAutonegValue
             };
