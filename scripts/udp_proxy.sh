@@ -24,9 +24,16 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
+# Load default values first
+DEFAULTS_FILE="$(dirname "$0")/../config/defaults.conf"
+if [ -f "$DEFAULTS_FILE" ]; then
+    source "$DEFAULTS_FILE"
+fi
+
+# Load configuration (overrides defaults)
 source "$CONFIG_FILE"
 
-UDP_PORT=${UDP_PROXY_PORT:-5000}
+UDP_PORT=${UDP_PROXY_PORT}
 
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
     FORPOST_IP=$(ip route get 1 | awk '{print $7; exit}')

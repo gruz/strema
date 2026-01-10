@@ -129,25 +129,32 @@ echo "[2/7] Configuring..."
 
 echo "Configuration will be created on first visit in the web UI."
 
+# Generate service_manager.sh from template
+echo ""
+echo "[3/7] Generating service manager..."
+if [ -f "$SCRIPT_DIR/scripts/service_manager.sh.template" ]; then
+    cp "$SCRIPT_DIR/scripts/service_manager.sh.template" "$SCRIPT_DIR/scripts/service_manager.sh"
+    echo "✅ Service manager generated from template"
+else
+    echo "❌ Error: service_manager.sh.template not found"
+    exit 1
+fi
+
 # Check required files
 echo ""
-echo "[3/7] Checking files..."
+echo "[4/7] Checking files..."
 REQUIRED_FILES=(
     "$SCRIPT_DIR/scripts/start_stream.sh"
     "$SCRIPT_DIR/scripts/get_frequency.sh"
     "$SCRIPT_DIR/scripts/update_frequency.sh"
     "$SCRIPT_DIR/scripts/watchdog.sh"
     "$SCRIPT_DIR/scripts/udp_proxy.sh"
+    "$SCRIPT_DIR/scripts/service_manager.sh"
     "$CONFIG_TEMPLATE"
     "$SERVICE_FILE"
     "$SCRIPT_DIR/web/web_config.py"
     "$SCRIPT_DIR/web/templates/index.html"
     "$SCRIPT_DIR/scripts/update_autorestart.sh"
-    "$SCRIPT_DIR/systemd/forpost-stream-autorestart.timer"
-    "$SCRIPT_DIR/systemd/forpost-stream-autorestart.service"
-    "$SCRIPT_DIR/systemd/forpost-stream-watchdog.timer"
-    "$SCRIPT_DIR/systemd/forpost-stream-watchdog.service"
-    "$SCRIPT_DIR/systemd/forpost-udp-proxy.service"
 )
 
 # VERSION file is optional - will be created by GitHub Action or get_version.sh
@@ -193,44 +200,22 @@ echo "All files in place."
 
 # Install systemd service
 echo ""
-echo "[4/7] Installing systemd services..."
-# Replace __INSTALL_DIR__ placeholder with actual script directory
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream.service" > /etc/systemd/system/forpost-stream.service
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-config.path" > /etc/systemd/system/forpost-stream-config.path
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-web.service" > /etc/systemd/system/forpost-stream-web.service
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-stream-watchdog.service" > /etc/systemd/system/forpost-stream-watchdog.service
-sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$SCRIPT_DIR/systemd/forpost-udp-proxy.service" > /etc/systemd/system/forpost-udp-proxy.service
-cp "$SCRIPT_DIR/systemd/forpost-stream-restart.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/systemd/forpost-stream-autorestart.timer" /etc/systemd/system/
-cp "$SCRIPT_DIR/systemd/forpost-stream-autorestart.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/systemd/forpost-stream-watchdog.timer" /etc/systemd/system/
-systemctl daemon-reload
+echo "[5/7] Installing systemd services..."
+source "$SCRIPT_DIR/scripts/service_manager.sh"
+install_all_services "$SCRIPT_DIR"
 
 # Enable and start services
 echo ""
-echo "[5/7] Enabling services..."
-# Stream service is disabled by default - control via web interface
-systemctl disable "$SERVICE_NAME" 2>/dev/null || true
-systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-# UDP proxy is disabled by default - controlled by web interface
-systemctl disable forpost-udp-proxy 2>/dev/null || true
-systemctl stop forpost-udp-proxy 2>/dev/null || true
-# Enable config watcher for automatic restart on config changes
-systemctl enable forpost-stream-config.path
-systemctl start forpost-stream-config.path
-# Enable and start web interface
-systemctl enable forpost-stream-web
-systemctl start forpost-stream-web
-# Enable watchdog timer
-systemctl enable forpost-stream-watchdog.timer
-systemctl start forpost-stream-watchdog.timer
+echo "[6/7] Enabling services..."
+enable_services
+echo "Power settings service enabled (will apply on boot)"
 
 echo ""
 echo "=========================================="
 echo "Installation complete!"
 echo "=========================================="
 echo ""
-echo "[6/7] Getting network information..."
+echo "[7/7] Getting network information..."
 IP_ADDRESS=$(echo "${SSH_CONNECTION:-}" | awk '{print $3}')
 if [ -z "$IP_ADDRESS" ]; then
     IP_ADDRESS=$(hostname -I | awk '{print $1}')
@@ -253,6 +238,6 @@ echo "  Logs:       sudo journalctl -u $SERVICE_NAME -f"
 echo "  Stream log: tail -f $SCRIPT_DIR/logs/stream.log"
 echo "  Watchdog:   tail -f $SCRIPT_DIR/logs/watchdog.log"
 echo ""
-echo "[7/7] Watchdog enabled - monitors stream health every 2 minutes"
+echo "Watchdog enabled - monitors stream health every 2 minutes"
 echo "Configuration will be created in the web UI: $SCRIPT_DIR/config/stream.conf"
 echo ""

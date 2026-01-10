@@ -8,8 +8,17 @@ GET_FREQ="$SCRIPT_DIR/get_frequency.sh"
 SCAN_DETECTOR="$SCRIPT_DIR/detect_scan_state.sh"
 UPDATE_INTERVAL=2  # seconds
 
-# Get STREAM_MODE from environment or default to "always"
-STREAM_MODE="${STREAM_MODE:-always}"
+# Load default values first
+DEFAULTS_FILE="$(dirname "$0")/../config/defaults.conf"
+if [ -f "$DEFAULTS_FILE" ]; then
+    source "$DEFAULTS_FILE"
+fi
+
+# Load configuration if exists (overrides defaults)
+CONFIG_FILE="$SCRIPT_DIR/../config/stream.conf"
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+fi
 
 # Remove old file and create new with correct permissions
 rm -f "$FREQ_FILE"

@@ -225,6 +225,17 @@
             100% { transform: rotate(360deg); }
         }
 
+        @keyframes blink-red {
+            0%, 100% { 
+                border-color: #ccc;
+                box-shadow: none;
+            }
+            50% { 
+                border-color: #dc3545;
+                box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+            }
+        }
+
         .update-overlay {
             display: none;
             position: fixed;
@@ -272,13 +283,14 @@
             <div>
                 <span id="statusBadge"></span>
                 <span id="operationBadge" class="status-badge status-pending" style="display:none;"></span>
-                <span id="cpuModeBadge" class="cpu-mode-badge"></span>
+                <span id="cpuModeBadge" class="cpu-mode-badge cpu-high">⚡ Перекодування</span>
             </div>
         </div>
 
         <div id="alertBox" class="alert"></div>
 
-        <div class="card" id="updateCard" style="display: none;">
+
+        <div class="card" id="updateCard">
             <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="toggleUpdateSection()">
                 <span>🔄 Оновлення системи <span style="font-size: 12px; color: #999;">(версія: <span id="currentVersionBadge">...</span>)</span> <span id="newVersionBadge" style="display: none; background: #28a745; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">НОВА ВЕРСІЯ</span></span>
                 <span id="updateToggleIcon" style="font-size: 20px;">▼</span>
@@ -348,6 +360,65 @@
         </div>
 
         <div class="card">
+            <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="togglePowerSettings()">
+                <span>⚡ Енергозбереження <span style="font-size: 12px; color: #999;">(для довгих PoE кабелів)</span></span>
+                <span id="powerSettingsIcon" style="font-size: 20px;">▼</span>
+            </div>
+            
+            <div id="powerSettingsSection" style="display: none; margin-top: 12px;">
+                <div style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #ffc107;">
+                    <strong style="color: #856404;">💡 Коли використовувати:</strong>
+                    <p style="margin: 8px 0 0 0; font-size: 13px; color: #856404;">
+                        При живленні через PoE на відстані 80-100м можливі проблеми зі стабільністю через падіння напруги. 
+                        Вимкнення невикористовуваних компонентів зменшує споживання на 2-3W і підвищує стабільність.
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="powerSaveWifi" style="width: auto; margin-right: 8px;">
+                        Вимкнути WiFi
+                    </label>
+                    <span class="help-text">Економія ~1W. Вимикайте, якщо WiFi не використовується.</span>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="powerSaveBluetooth" style="width: auto; margin-right: 8px;">
+                        Вимкнути Bluetooth
+                    </label>
+                    <span class="help-text">Економія ~0.5W. Вимикайте, якщо Bluetooth не використовується.</span>
+                </div>
+
+
+                <div class="form-group">
+                    <label for="powerSaveEthSpeed">Швидкість Ethernet</label>
+                    <span class="help-text">100Mbps споживає менше енергії і стабільніший на довгих кабелях. Вимкнення auto-negotiation запобігає Link Down/Up циклам.</span>
+                    <select id="powerSaveEthSpeed">
+                        <option value="auto">Авто (1000Mbps з auto-negotiation)</option>
+                        <option value="1000">1000Mbps без auto-negotiation</option>
+                        <option value="100">100Mbps без auto-negotiation (рекомендовано для PoE 100м)</option>
+                    </select>
+                </div>
+
+                <div style="background: #d1ecf1; padding: 12px; border-radius: 8px; margin: 16px 0; border-left: 4px solid #17a2b8;">
+                    <strong style="color: #0c5460;">📊 Поточний стан:</strong>
+                    <div style="margin-top: 8px; font-size: 13px; color: #0c5460;">
+                        <div>WiFi: <span id="currentWifiState">...</span></div>
+                        <div>Bluetooth: <span id="currentBluetoothState">...</span></div>
+                        <div>Ethernet: <span id="currentEthState">...</span></div>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn btn-primary" id="applyPowerBtn">
+                        ⚡ Застосувати налаштування
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
             <form id="configForm">
                 <div class="section-title">Основні налаштування</div>
 
@@ -357,67 +428,323 @@
                     <input type="text" id="RTMP_URL" name="RTMP_URL" required>
                 </div>
 
-                <div class="section-title">Оверлей</div>
+                <div class="section-title">Оверлей на відео</div>
 
                 <div class="form-group">
-                    <label for="OVERLAY_TEXT">Текст оверлею ⚠️</label>
-                    <span class="help-text">Залиште пустим щоб вимкнути оверлей</span>
-                    <span class="help-text" style="color: #d9534f; font-weight: 600;">⚠️ УВАГА: Оверлей суттєво збільшує навантаження на CPU! Використовуйте обережно.</span>
-                    <input type="text" id="OVERLAY_TEXT" name="OVERLAY_TEXT">
-                </div>
-
-                <div class="form-group">
-                    <label for="OVERLAY_POSITION">Позиція оверлею</label>
-                    <select id="OVERLAY_POSITION" name="OVERLAY_POSITION">
-                        <option value="top-left">Зверху зліва</option>
-                        <option value="top-right">Зверху справа</option>
-                        <option value="bottom-left">Знизу зліва</option>
-                        <option value="bottom-right">Знизу справа</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="SHOW_FREQUENCY">Показувати частоту ⚠️</label>
-                    <span class="help-text" style="color: #d9534f; font-weight: 600;">⚠️ УВАГА: Відображення частоти суттєво збільшує навантаження на CPU! Використовуйте обережно.</span>
-                    <select id="SHOW_FREQUENCY" name="SHOW_FREQUENCY">
-                        <option value="true">Так</option>
+                    <label for="OVERLAY_ENABLED">Увімкнути оверлей</label>
+                    <span class="help-text" style="color: #d9534f; font-weight: 600;">⚠️ УВАГА: Оверлей збільшує навантаження на CPU і вимикає копіювання стріму (використовується перекодування)</span>
+                    <select id="OVERLAY_ENABLED" name="OVERLAY_ENABLED">
+                        <option value="true" selected>Так</option>
                         <option value="false">Ні</option>
                     </select>
                 </div>
 
-                <div class="form-group">
-                    <label for="FREQUENCY_POSITION">Позиція частоти</label>
-                    <select id="FREQUENCY_POSITION" name="FREQUENCY_POSITION">
-                        <option value="top-left">Зверху зліва</option>
-                        <option value="top-right">Зверху справа</option>
-                        <option value="bottom-left">Знизу зліва</option>
-                        <option value="bottom-right">Знизу справа</option>
-                    </select>
+                <div id="overlayOptionsSection" style="display: block;">
+                    <!-- Static Overlay -->
+                    <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px;" onclick="toggleStaticOverlay()">
+                        <span>📝 Статичний текст</span>
+                        <span id="staticOverlayIcon" style="font-size: 20px;">▼</span>
+                    </div>
+                    
+                    <div id="staticOverlaySection" style="display: none; margin: 12px 0; padding: 20px; background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;">
+                        <div class="form-group">
+                            <label for="OVERLAY_TEXT">Текст оверлею</label>
+                            <span class="help-text">Статичний текст, який завжди відображається на відео. Наприклад, номер пристрою, умовне позначення</span>
+                            <input type="text" id="OVERLAY_TEXT" name="OVERLAY_TEXT" placeholder="Наприклад: [N] дзига">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="OVERLAY_POSITION">Позиція тексту</label>
+                            <select id="OVERLAY_POSITION" name="OVERLAY_POSITION">
+                                <option value="top-left">Зверху зліва</option>
+                                <option value="top-right">Зверху справа</option>
+                                <option value="bottom-left">Знизу зліва</option>
+                                <option value="bottom-right">Знизу справа</option>
+                            </select>
+                        </div>
+
+                        <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 14px;" onclick="toggleStaticSettings()">
+                            <span>⚙️ Налаштування відображення</span>
+                            <span id="staticSettingsIcon" style="font-size: 16px;">▼</span>
+                        </div>
+                        
+                        <div id="staticSettings" style="display: none; margin: 12px 0; padding: 15px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px;">
+                            <div class="form-group">
+                                <label for="OVERLAY_FONTSIZE_CUSTOM">Розмір шрифту</label>
+                                <input type="number" id="OVERLAY_FONTSIZE_CUSTOM" name="OVERLAY_FONTSIZE_CUSTOM" value="20" min="8" max="72">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="OVERLAY_TEXT_COLOR">Колір тексту</label>
+                                <select id="OVERLAY_TEXT_COLOR" name="OVERLAY_TEXT_COLOR">
+                                    <option value="white" selected>Білий</option>
+                                    <option value="yellow">Жовтий</option>
+                                    <option value="red">Червоний</option>
+                                    <option value="green">Зелений</option>
+                                    <option value="blue">Синій</option>
+                                    <option value="orange">Помаранчевий</option>
+                                    <option value="cyan">Блакитний</option>
+                                    <option value="magenta">Пурпурний</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="OVERLAY_TEXT_OPACITY_CUSTOM">Прозорість тексту (0.0 - 1.0)</label>
+                                <input type="number" id="OVERLAY_TEXT_OPACITY_CUSTOM" name="OVERLAY_TEXT_OPACITY_CUSTOM" value="1.0" min="0" max="1" step="0.1">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="OVERLAY_BORDER_WIDTH">Товщина обводки (0 = фон)</label>
+                                <span class="help-text">Обводка робить текст читабельним на будь-якому тлі</span>
+                                <input type="number" id="OVERLAY_BORDER_WIDTH" name="OVERLAY_BORDER_WIDTH" value="0" min="0" max="10">
+                            </div>
+
+                            <div id="staticBgGroup" style="display: block;">
+                                <div class="form-group">
+                                    <label for="OVERLAY_BG_COLOR">Колір фону</label>
+                                    <select id="OVERLAY_BG_COLOR" name="OVERLAY_BG_COLOR">
+                                        <option value="black" selected>Чорний</option>
+                                        <option value="white">Білий</option>
+                                        <option value="red">Червоний</option>
+                                        <option value="green">Зелений</option>
+                                        <option value="blue">Синій</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="OVERLAY_BG_OPACITY_CUSTOM">Прозорість фону (0.0 - 1.0)</label>
+                                    <input type="number" id="OVERLAY_BG_OPACITY_CUSTOM" name="OVERLAY_BG_OPACITY_CUSTOM" value="0.5" min="0" max="1" step="0.1">
+                                </div>
+                            </div>
+
+                            <div id="staticBorderGroup" style="display: none;">
+                                <div class="form-group">
+                                    <label for="OVERLAY_BORDER_COLOR">Колір обводки</label>
+                                    <select id="OVERLAY_BORDER_COLOR" name="OVERLAY_BORDER_COLOR">
+                                        <option value="black" selected>Чорний</option>
+                                        <option value="white">Білий</option>
+                                        <option value="red">Червоний</option>
+                                        <option value="green">Зелений</option>
+                                        <option value="blue">Синій</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Frequency Display -->
+                    <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px;" onclick="toggleFrequencyOverlay()">
+                        <span>📡 Відображення частоти</span>
+                        <span id="frequencyOverlayIcon" style="font-size: 20px;">▼</span>
+                    </div>
+                    
+                    <div id="frequencyOverlaySection" style="display: none; margin: 12px 0; padding: 20px; background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;">
+                        <div class="form-group">
+                            <label for="SHOW_FREQUENCY">Показувати частоту</label>
+                            <select id="SHOW_FREQUENCY" name="SHOW_FREQUENCY">
+                                <option value="true">Так</option>
+                                <option value="false">Ні</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="FREQUENCY_POSITION">Позиція частоти</label>
+                            <select id="FREQUENCY_POSITION" name="FREQUENCY_POSITION">
+                                <option value="top-left">Зверху зліва</option>
+                                <option value="top-right">Зверху справа</option>
+                                <option value="bottom-left">Знизу зліва</option>
+                                <option value="bottom-right">Знизу справа</option>
+                            </select>
+                        </div>
+
+                        <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 14px;" onclick="toggleFrequencySettings()">
+                            <span>⚙️ Налаштування відображення</span>
+                            <span id="frequencySettingsIcon" style="font-size: 16px;">▼</span>
+                        </div>
+                        
+                        <div id="frequencySettings" style="display: none; margin: 12px 0; padding: 15px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px;">
+                            <div class="form-group">
+                                <label for="FREQUENCY_FONTSIZE">Розмір шрифту</label>
+                                <input type="number" id="FREQUENCY_FONTSIZE" name="FREQUENCY_FONTSIZE" value="20" min="8" max="72">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="FREQUENCY_TEXT_COLOR">Колір тексту</label>
+                                <select id="FREQUENCY_TEXT_COLOR" name="FREQUENCY_TEXT_COLOR">
+                                    <option value="white">Білий</option>
+                                    <option value="yellow" selected>Жовтий</option>
+                                    <option value="red">Червоний</option>
+                                    <option value="green">Зелений</option>
+                                    <option value="blue">Синій</option>
+                                    <option value="orange">Помаранчевий</option>
+                                    <option value="cyan">Блакитний</option>
+                                    <option value="magenta">Пурпурний</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="FREQUENCY_TEXT_OPACITY">Прозорість тексту (0.0 - 1.0)</label>
+                                <input type="number" id="FREQUENCY_TEXT_OPACITY" name="FREQUENCY_TEXT_OPACITY" value="1.0" min="0" max="1" step="0.1">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="FREQUENCY_BORDER_WIDTH">Товщина обводки (0 = фон)</label>
+                                <span class="help-text">Обводка робить текст читабельним на будь-якому тлі</span>
+                                <input type="number" id="FREQUENCY_BORDER_WIDTH" name="FREQUENCY_BORDER_WIDTH" value="0" min="0" max="10">
+                            </div>
+
+                            <div id="frequencyBgGroup" style="display: block;">
+                                <div class="form-group">
+                                    <label for="FREQUENCY_BG_COLOR">Колір фону</label>
+                                    <select id="FREQUENCY_BG_COLOR" name="FREQUENCY_BG_COLOR">
+                                        <option value="black" selected>Чорний</option>
+                                        <option value="white">Білий</option>
+                                        <option value="red">Червоний</option>
+                                        <option value="green">Зелений</option>
+                                        <option value="blue">Синій</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="FREQUENCY_BG_OPACITY">Прозорість фону (0.0 - 1.0)</label>
+                                    <input type="number" id="FREQUENCY_BG_OPACITY" name="FREQUENCY_BG_OPACITY" value="0.5" min="0" max="1" step="0.1">
+                                </div>
+                            </div>
+
+                            <div id="frequencyBorderGroup" style="display: none;">
+                                <div class="form-group">
+                                    <label for="FREQUENCY_BORDER_COLOR">Колір обводки</label>
+                                    <select id="FREQUENCY_BORDER_COLOR" name="FREQUENCY_BORDER_COLOR">
+                                        <option value="black" selected>Чорний</option>
+                                        <option value="white">Білий</option>
+                                        <option value="red">Червоний</option>
+                                        <option value="green">Зелений</option>
+                                        <option value="blue">Синій</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Overlay -->
+                    <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px;" onclick="toggleDynamicOverlay()">
+                        <span>🔤 Динамічний оверлей</span>
+                        <span id="dynamicOverlayIcon" style="font-size: 20px;">▼</span>
+                    </div>
+                    
+                    <div id="dynamicOverlaySection" style="display: none; margin: 12px 0; padding: 20px; background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;">
+                        <div class="form-group">
+                                <label for="dynamicOverlayText">Текст для відображення на відео</label>
+                                <span class="help-text" style="display: block; margin-bottom: 8px;">
+                                    <strong>Призначення:</strong> Виведення інформації про об'єкт на відео (населений пункт, орієнтири, напрям руху, зміни позиції). 
+                                    Наприклад: "Дрон над с.Смертьмоскальське, рух на північ". 
+                                    При переході на іншу частоту текст автоматично очищається, щоб не вводити в оману.
+                                </span>
+                                <span class="help-text">💡 <strong>Керування:</strong> Enter — зберегти текст на відео • Escape або ✕ — очистити • Автоматично зникає при скануванні</span>
+                                <div style="position: relative;">
+                                    <input type="text" id="dynamicOverlayText" placeholder="Введіть текст та натисніть Enter..." style="padding-right: 35px;">
+                                    <button type="button" id="clearDynamicText" style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #999; font-size: 18px; cursor: pointer; padding: 5px 10px; display: none;" title="Очистити текст">✕</button>
+                                </div>
+                            </div>
+                            <div style="margin-top: 8px; padding: 8px 12px; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 8px;" id="scanningStatus">
+                                <span id="scanningIndicator" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #28a745;"></span>
+                                <span id="scanningText" style="font-weight: 600; color: #28a745;">Частота стабільна</span>
+                            </div>
+                            <div style="margin-top: 12px; padding: 12px; background: #f0f0f0; border-radius: 8px; font-size: 13px; color: #666;">
+                                <strong>Поточний текст на відео:</strong> <span id="currentDynamicText" style="color: #333; font-weight: 600;">—</span>
+                            </div>
+
+                            <!-- Dynamic Overlay Settings -->
+                            <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 14px;" onclick="toggleDynamicOverlaySettings()">
+                                <span>⚙️ Налаштування відображення</span>
+                                <span id="dynamicOverlaySettingsIcon" style="font-size: 16px;">▼</span>
+                            </div>
+                            
+                            <div id="dynamicOverlaySettings" style="display: none; margin: 12px 0; padding: 15px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px;">
+                                <div class="form-group">
+                                    <label for="DYNAMIC_OVERLAY_POSITION">Позиція</label>
+                                    <select id="DYNAMIC_OVERLAY_POSITION" name="DYNAMIC_OVERLAY_POSITION">
+                                        <option value="top-left">Зверху зліва</option>
+                                        <option value="top-right">Зверху справа</option>
+                                        <option value="bottom-left" selected>Знизу зліва</option>
+                                        <option value="bottom-right">Знизу справа</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="DYNAMIC_OVERLAY_FONTSIZE">Розмір шрифту</label>
+                                    <input type="number" id="DYNAMIC_OVERLAY_FONTSIZE" name="DYNAMIC_OVERLAY_FONTSIZE" value="20" min="8" max="72">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="DYNAMIC_OVERLAY_TEXT_COLOR">Колір тексту</label>
+                                    <select id="DYNAMIC_OVERLAY_TEXT_COLOR" name="DYNAMIC_OVERLAY_TEXT_COLOR">
+                                        <option value="white">Білий</option>
+                                        <option value="yellow">Жовтий</option>
+                                        <option value="red">Червоний</option>
+                                        <option value="green">Зелений</option>
+                                        <option value="blue">Синій</option>
+                                        <option value="orange">Помаранчевий</option>
+                                        <option value="cyan">Блакитний</option>
+                                        <option value="magenta">Пурпурний</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="DYNAMIC_OVERLAY_TEXT_OPACITY">Прозорість тексту (0.0 - 1.0)</label>
+                                    <input type="number" id="DYNAMIC_OVERLAY_TEXT_OPACITY" name="DYNAMIC_OVERLAY_TEXT_OPACITY" value="1.0" min="0" max="1" step="0.1">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="DYNAMIC_OVERLAY_BORDER_WIDTH">Товщина обводки (0 = фон)</label>
+                                    <span class="help-text">Обводка робить текст читабельним на будь-якому тлі</span>
+                                    <input type="number" id="DYNAMIC_OVERLAY_BORDER_WIDTH" name="DYNAMIC_OVERLAY_BORDER_WIDTH" value="0" min="0" max="10">
+                                </div>
+
+                                <div id="dynamicBgGroup" style="display: block;">
+                                    <div class="form-group">
+                                        <label for="DYNAMIC_OVERLAY_BG_COLOR">Колір фону</label>
+                                        <select id="DYNAMIC_OVERLAY_BG_COLOR" name="DYNAMIC_OVERLAY_BG_COLOR">
+                                            <option value="black">Чорний</option>
+                                            <option value="white">Білий</option>
+                                            <option value="red">Червоний</option>
+                                            <option value="green">Зелений</option>
+                                            <option value="blue">Синій</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="DYNAMIC_OVERLAY_BG_OPACITY">Прозорість фону (0.0 - 1.0)</label>
+                                        <input type="number" id="DYNAMIC_OVERLAY_BG_OPACITY" name="DYNAMIC_OVERLAY_BG_OPACITY" value="0.5" min="0" max="1" step="0.1">
+                                    </div>
+                                </div>
+
+                                <div id="dynamicBorderGroup" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="DYNAMIC_OVERLAY_BORDER_COLOR">Колір обводки</label>
+                                        <select id="DYNAMIC_OVERLAY_BORDER_COLOR" name="DYNAMIC_OVERLAY_BORDER_COLOR">
+                                            <option value="black">Чорний</option>
+                                            <option value="white">Білий</option>
+                                            <option value="red">Червоний</option>
+                                            <option value="green">Зелений</option>
+                                            <option value="blue">Синій</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                    </div>
                 </div>
 
+                <div class="section-title">Режим трансляції</div>
+
                 <div class="form-group">
-                    <label for="STREAM_MODE">Режим трансляції при скануванні</label>
+                    <label for="STREAM_MODE">Режим при скануванні</label>
                     <span class="help-text">Визначає поведінку трансляції коли DZYGA сканує частоти</span>
                     <select id="STREAM_MODE" name="STREAM_MODE">
                         <option value="always">Завжди транслювати (ігнорувати сканування)</option>
                         <option value="on-lock">Транслювати тільки при зупинці (пауза під час сканування)</option>
                         <option value="overlay">Показувати індикатор "СКАНУВАННЯ..." на екрані</option>
                     </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="OVERLAY_FONTSIZE">Розмір шрифту</label>
-                    <input type="number" id="OVERLAY_FONTSIZE" name="OVERLAY_FONTSIZE" value="16" min="8" max="48">
-                </div>
-
-                <div class="form-group">
-                    <label for="OVERLAY_BG_OPACITY">Прозорість фону (0.0 - 1.0)</label>
-                    <input type="number" id="OVERLAY_BG_OPACITY" name="OVERLAY_BG_OPACITY" value="0.5" min="0" max="1" step="0.1">
-                </div>
-
-                <div class="form-group">
-                    <label for="OVERLAY_TEXT_OPACITY">Прозорість тексту (0.0 - 1.0)</label>
-                    <input type="number" id="OVERLAY_TEXT_OPACITY" name="OVERLAY_TEXT_OPACITY" value="1.0" min="0" max="1" step="0.1">
                 </div>
 
                 <div class="section-title">Якість відео</div>
@@ -589,18 +916,14 @@
 
         function updateCpuModeBadge(config) {
             const badge = document.getElementById('cpuModeBadge');
-            const hasOverlay = config.OVERLAY_TEXT && config.OVERLAY_TEXT.trim() !== '';
-            const showFreq = config.SHOW_FREQUENCY === 'true';
+            const overlayEnabled = config.OVERLAY_ENABLED === 'true';
             
-            if (hasOverlay || showFreq) {
+            if (overlayEnabled) {
                 badge.className = 'cpu-mode-badge cpu-high';
-                let features = [];
-                if (hasOverlay) features.push('оверлей');
-                if (showFreq) features.push('частота');
-                badge.textContent = '⚠️ Високе навантаження CPU (' + features.join(', ') + '). За умови стабільної роботи це не є критичним. У разі затримок або нестабільності трансляції рекомендується вимкнути відповідні параметри нижче. У такому випадку текст та/або частота не відображатимуться на відео, проте навантаження на пристрій буде мінімальним.';
+                badge.textContent = '⚡ Перекодування';
             } else {
-                badge.className = 'cpu-mode-badge cpu-normal';
-                badge.textContent = '✓ Штатний режим';
+                badge.className = 'cpu-mode-badge cpu-low';
+                badge.textContent = '✨ Копіювання';
             }
         }
 
@@ -616,10 +939,124 @@
                         }
                     }
                     updateCpuModeBadge(config);
+                    updateOverlayUI(config);
                 })
                 .catch(err => {
                     showAlert('Помилка завантаження конфігурації: ' + err.message, 'error');
                 });
+        }
+
+        function updateOverlayUI(config) {
+            // Show/hide overlay options section based on OVERLAY_ENABLED
+            const overlayEnabled = config.OVERLAY_ENABLED === 'true';
+            const overlayOptionsSection = document.getElementById('overlayOptionsSection');
+            if (overlayOptionsSection) {
+                overlayOptionsSection.style.display = overlayEnabled ? 'block' : 'none';
+            }
+            
+            const borderWidth = parseInt(config.DYNAMIC_OVERLAY_BORDER_WIDTH);
+            const bgGroup = document.getElementById('dynamicBgGroup');
+            const borderGroup = document.getElementById('dynamicBorderGroup');
+            if (bgGroup && borderGroup) {
+                if (borderWidth > 0) {
+                    bgGroup.style.display = 'none';
+                    borderGroup.style.display = 'block';
+                } else {
+                    bgGroup.style.display = 'block';
+                    borderGroup.style.display = 'none';
+                }
+            }
+        }
+
+        let lastScanningState = 'stable';
+        let isTextSaved = true;  // Track if current text in input is saved to server
+        let lastSavedText = '';  // Track what was last saved
+        
+        function loadDynamicOverlayText() {
+            fetch('/api/dynamic-overlay')
+                .then(response => response.json())
+                .then(data => {
+                    const currentText = document.getElementById('currentDynamicText');
+                    const textInput = document.getElementById('dynamicOverlayText');
+                    const clearButton = document.getElementById('clearDynamicText');
+                    const scanningIndicator = document.getElementById('scanningIndicator');
+                    const scanningText = document.getElementById('scanningText');
+                    
+                    // Always update display text with server value
+                    if (currentText) {
+                        currentText.textContent = data.text || '—';
+                    }
+                    
+                    // Update scanning status indicator
+                    const isScanning = data.scanning === 'scanning';
+                    if (scanningIndicator && scanningText) {
+                        if (isScanning) {
+                            scanningIndicator.style.background = '#ffc107';
+                            scanningText.style.color = '#ffc107';
+                            scanningText.textContent = '🔍 Сканування...';
+                        } else {
+                            scanningIndicator.style.background = '#28a745';
+                            scanningText.style.color = '#28a745';
+                            scanningText.textContent = '✓ Частота стабільна';
+                        }
+                    }
+                    
+                    // Clear input only when:
+                    // 1. Transitioning from stable to scanning
+                    // 2. AND text was previously saved (not being edited)
+                    if (lastScanningState === 'stable' && isScanning && isTextSaved) {
+                        if (textInput) {
+                            textInput.value = '';
+                            lastSavedText = '';
+                        }
+                        if (clearButton) {
+                            clearButton.style.display = 'none';
+                        }
+                    }
+                    
+                    lastScanningState = data.scanning || 'stable';
+                    
+                    // Update clear button visibility
+                    if (clearButton && textInput) {
+                        clearButton.style.display = textInput.value ? 'block' : 'none';
+                    }
+                })
+                .catch(err => console.error('Failed to load dynamic overlay text:', err));
+        }
+
+        function saveDynamicOverlayText(text) {
+            const isScanning = lastScanningState === 'scanning';
+            // If scanning, show visual feedback and don't save
+            if (isScanning) {
+                const textInput = document.getElementById('dynamicOverlayText');
+                if (textInput) {
+                    // Blink effect
+                    textInput.style.animation = 'none';
+                    setTimeout(() => {
+                        textInput.style.animation = 'blink-red 0.5s';
+                    }, 10);
+                }
+                return;
+            }
+            
+            fetch('/api/dynamic-overlay', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('Dynamic overlay text updated');
+                    isTextSaved = true;
+                    lastSavedText = text;
+                    // Reload to show current text
+                    loadDynamicOverlayText();
+                }
+            })
+            .catch(err => console.error('Failed to save dynamic overlay text:', err));
         }
 
         document.getElementById('configForm').addEventListener('submit', function(e) {
@@ -928,9 +1365,6 @@
                     document.getElementById('currentVersion').textContent = data.current;
                     document.getElementById('currentVersionBadge').textContent = data.current;
                     
-                    // Show update card
-                    document.getElementById('updateCard').style.display = 'block';
-                    
                     // Show update available banner and badge
                     const newVersionBadge = document.getElementById('newVersionBadge');
                     if (data.has_update) {
@@ -1037,13 +1471,315 @@
             }
         }
         
+        function toggleStaticOverlay() {
+            const content = document.getElementById('staticOverlaySection');
+            const icon = document.getElementById('staticOverlayIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+        
+        function toggleStaticSettings() {
+            const content = document.getElementById('staticSettings');
+            const icon = document.getElementById('staticSettingsIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+        
+        function toggleFrequencyOverlay() {
+            const content = document.getElementById('frequencyOverlaySection');
+            const icon = document.getElementById('frequencyOverlayIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+        
+        function toggleDynamicOverlay() {
+            const content = document.getElementById('dynamicOverlaySection');
+            const icon = document.getElementById('dynamicOverlayIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+        
+        function toggleFrequencySettings() {
+            const content = document.getElementById('frequencySettings');
+            const icon = document.getElementById('frequencySettingsIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+        
+        function toggleDynamicOverlaySettings() {
+            const content = document.getElementById('dynamicOverlaySettings');
+            const icon = document.getElementById('dynamicOverlaySettingsIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+        
+        function togglePowerSettings() {
+            const content = document.getElementById('powerSettingsSection');
+            const icon = document.getElementById('powerSettingsIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+                loadPowerSettings();
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+        
+        function loadPowerSettings() {
+            fetch('/api/power-settings')
+                .then(response => response.json())
+                .then(data => {
+                    const config = data.config || {};
+                    const current = data.current || {};
+                    
+                    // Update checkboxes
+                    document.getElementById('powerSaveWifi').checked = config.POWER_SAVE_WIFI === 'true';
+                    document.getElementById('powerSaveBluetooth').checked = config.POWER_SAVE_BLUETOOTH === 'true';
+                    
+                    // Update Ethernet speed
+                    const ethSpeed = config.POWER_SAVE_ETH_SPEED;
+                    const ethAutoneg = config.POWER_SAVE_ETH_AUTONEG;
+                    let speedValue = 'auto';
+                    if (ethSpeed === '100' && ethAutoneg === 'off') {
+                        speedValue = '100';
+                    } else if (ethSpeed === '1000' && ethAutoneg === 'off') {
+                        speedValue = '1000';
+                    }
+                    document.getElementById('powerSaveEthSpeed').value = speedValue;
+                    
+                    // Update current state display
+                    document.getElementById('currentWifiState').textContent = current.wifi_blocked ? '✅ Вимкнено' : '❌ Увімкнено';
+                    document.getElementById('currentBluetoothState').textContent = current.bluetooth_blocked ? '✅ Вимкнено' : '❌ Увімкнено';
+                    
+                    let ethStateText = current.eth_speed + 'Mbps';
+                    if (current.eth_autoneg === 'on') {
+                        ethStateText += ' (auto-negotiation)';
+                    } else {
+                        ethStateText += ' (fixed)';
+                    }
+                    document.getElementById('currentEthState').textContent = ethStateText;
+                })
+                .catch(err => {
+                    console.error('Failed to load power settings:', err);
+                    showAlert('Не вдалося завантажити налаштування енергозбереження', 'error');
+                });
+        }
+        
+        function applyPowerSettings() {
+            const wifi = document.getElementById('powerSaveWifi').checked;
+            const bluetooth = document.getElementById('powerSaveBluetooth').checked;
+            const ethSpeed = document.getElementById('powerSaveEthSpeed').value;
+            
+            let ethSpeedValue = 'auto';
+            let ethAutonegValue = 'on';
+            
+            if (ethSpeed === '100') {
+                ethSpeedValue = '100';
+                ethAutonegValue = 'off';
+            } else if (ethSpeed === '1000') {
+                ethSpeedValue = '1000';
+                ethAutonegValue = 'off';
+            }
+            
+            const data = {
+                POWER_SAVE_WIFI: wifi ? 'true' : 'false',
+                POWER_SAVE_BLUETOOTH: bluetooth ? 'true' : 'false',
+                POWER_SAVE_ETH_SPEED: ethSpeedValue,
+                POWER_SAVE_ETH_AUTONEG: ethAutonegValue
+            };
+            
+            document.getElementById('applyPowerBtn').disabled = true;
+            
+            fetch('/api/power-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showAlert(result.message, 'success');
+                    setTimeout(() => loadPowerSettings(), 1000);
+                } else {
+                    showAlert(result.error || 'Помилка застосування налаштувань', 'error');
+                }
+            })
+            .catch(err => {
+                console.error('Failed to apply power settings:', err);
+                showAlert('Помилка з\'єднання з сервером', 'error');
+            })
+            .finally(() => {
+                document.getElementById('applyPowerBtn').disabled = false;
+            });
+        }
+        
+        // Power settings button handler
+        const applyPowerBtn = document.getElementById('applyPowerBtn');
+        if (applyPowerBtn) {
+            applyPowerBtn.addEventListener('click', applyPowerSettings);
+        }
+        
         // Update channel change handler
         document.getElementById('updateChannel').addEventListener('change', checkUpdates);
+
+        // Dynamic overlay text input handlers
+        const dynamicOverlayInput = document.getElementById('dynamicOverlayText');
+        const clearButton = document.getElementById('clearDynamicText');
+        
+        if (dynamicOverlayInput) {
+            // Show/hide clear button based on input content
+            const updateClearButton = () => {
+                if (clearButton) {
+                    clearButton.style.display = dynamicOverlayInput.value ? 'block' : 'none';
+                }
+            };
+            
+            // Mark text as unsaved when user types
+            dynamicOverlayInput.addEventListener('input', function() {
+                isTextSaved = (this.value === lastSavedText);
+                updateClearButton();
+            });
+            
+            // Save on Enter key
+            dynamicOverlayInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveDynamicOverlayText(this.value);
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.value = '';
+                    isTextSaved = true;
+                    lastSavedText = '';
+                    updateClearButton();
+                    saveDynamicOverlayText('');
+                }
+            });
+        }
+        
+        // Clear button handler
+        if (clearButton) {
+            clearButton.addEventListener('click', function() {
+                dynamicOverlayInput.value = '';
+                clearButton.style.display = 'none';
+                isTextSaved = true;
+                lastSavedText = '';
+                saveDynamicOverlayText('');
+                dynamicOverlayInput.focus();
+            });
+        }
+
+        // Overlay enabled toggle
+        const overlayEnabledSelect = document.getElementById('OVERLAY_ENABLED');
+        if (overlayEnabledSelect) {
+            overlayEnabledSelect.addEventListener('change', function() {
+                const config = { OVERLAY_ENABLED: this.value };
+                updateOverlayUI(config);
+                updateCpuModeBadge(config);
+            });
+        }
+
+        // Static overlay border width toggle
+        const staticBorderWidthInput = document.getElementById('OVERLAY_BORDER_WIDTH');
+        if (staticBorderWidthInput) {
+            staticBorderWidthInput.addEventListener('change', function() {
+                const borderWidth = parseInt(this.value || 0);
+                const bgGroup = document.getElementById('staticBgGroup');
+                const borderGroup = document.getElementById('staticBorderGroup');
+                if (bgGroup && borderGroup) {
+                    if (borderWidth > 0) {
+                        bgGroup.style.display = 'none';
+                        borderGroup.style.display = 'block';
+                    } else {
+                        bgGroup.style.display = 'block';
+                        borderGroup.style.display = 'none';
+                    }
+                }
+            });
+        }
+        
+        // Frequency border width toggle
+        const freqBorderWidthInput = document.getElementById('FREQUENCY_BORDER_WIDTH');
+        if (freqBorderWidthInput) {
+            freqBorderWidthInput.addEventListener('change', function() {
+                const borderWidth = parseInt(this.value || 0);
+                const bgGroup = document.getElementById('frequencyBgGroup');
+                const borderGroup = document.getElementById('frequencyBorderGroup');
+                if (bgGroup && borderGroup) {
+                    if (borderWidth > 0) {
+                        bgGroup.style.display = 'none';
+                        borderGroup.style.display = 'block';
+                    } else {
+                        bgGroup.style.display = 'block';
+                        borderGroup.style.display = 'none';
+                    }
+                }
+            });
+        }
+        
+        // Dynamic overlay border width toggle
+        const borderWidthInput = document.getElementById('DYNAMIC_OVERLAY_BORDER_WIDTH');
+        if (borderWidthInput) {
+            borderWidthInput.addEventListener('change', function() {
+                const borderWidth = parseInt(this.value || 0);
+                const bgGroup = document.getElementById('dynamicBgGroup');
+                const borderGroup = document.getElementById('dynamicBorderGroup');
+                if (bgGroup && borderGroup) {
+                    if (borderWidth > 0) {
+                        bgGroup.style.display = 'none';
+                        borderGroup.style.display = 'block';
+                    } else {
+                        bgGroup.style.display = 'block';
+                        borderGroup.style.display = 'none';
+                    }
+                }
+            });
+        }
 
         loadConfig();
         updateStatus();
         loadAutorestartSettings();
         checkUpdates();
+        
+        // Load dynamic overlay text on page load
+        setTimeout(() => {
+            loadDynamicOverlayText();
+        }, 500);
+        
+        // Poll dynamic overlay text every 3 seconds to sync with server
+        // This clears the input field when frequency changes >10 MHz
+        setInterval(loadDynamicOverlayText, 3000);
+        
         setInterval(updateStatus, 10000);
         setInterval(checkUpdates, 300000); // Check updates every 5 minutes
     </script>

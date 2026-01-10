@@ -1,0 +1,16 @@
+[Unit]
+Description=FORPOST Power Saving Settings
+After=network.target
+Before=forpost-stream.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=__INSTALL_DIR__
+ExecStart=__INSTALL_DIR__/scripts/apply_power_settings.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

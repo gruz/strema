@@ -181,6 +181,12 @@ echo "Setting permissions..."
 chmod +x "$INSTALL_DIR/scripts/"*.sh
 chmod +x "$INSTALL_DIR/web/web_config.py"
 
+# Fix all permissions using dedicated script
+if [ -f "$INSTALL_DIR/scripts/fix_permissions.sh" ]; then
+    echo "Running permissions fix script..."
+    bash "$INSTALL_DIR/scripts/fix_permissions.sh"
+fi
+
 # Update systemd services
 echo ""
 echo "Updating systemd services..."

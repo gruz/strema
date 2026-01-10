@@ -29,11 +29,16 @@ if [ ! -f "$CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Load configuration
+# Load default values first
+DEFAULTS_FILE="$(dirname "$0")/../config/defaults.conf"
+if [ -f "$DEFAULTS_FILE" ]; then
+    source "$DEFAULTS_FILE"
+fi
+
+# Load configuration (overrides defaults)
 source "$CONFIG_FILE"
 
-# FFmpeg logging level (quiet, panic, fatal, error, warning, info, verbose, debug, trace)
-FFMPEG_LOGLEVEL=${FFMPEG_LOGLEVEL:-info}
+# FFmpeg logging level is now loaded from defaults.conf
 
 # Auto-detect IP address if not set in config
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
@@ -59,9 +64,7 @@ fi
 # Build RTSP URL
 RTSP_URL="rtsp://${FORPOST_IP}:${RTSP_PORT}/${VIDEO_DEVICE}"
 
-# UDP Proxy settings (if enabled, read from UDP instead of RTSP)
-USE_UDP_PROXY=${USE_UDP_PROXY:-true}
-UDP_PROXY_PORT=${UDP_PROXY_PORT:-5000}
+# UDP Proxy settings (loaded from defaults.conf)
 if [ "$USE_UDP_PROXY" = "true" ]; then
     # Small buffer to prevent lag accumulation - old packets are dropped
     INPUT_URL="udp://127.0.0.1:${UDP_PROXY_PORT}?overrun_nonfatal=1&fifo_size=65536&buffer_size=131072&listen=0"
@@ -89,10 +92,14 @@ FREQ_FILE="/tmp/dzyga_freq.txt"
 FREQ_UPDATER="$SCRIPT_DIR/update_frequency.sh"
 SCAN_DETECTOR="$SCRIPT_DIR/detect_scan_state.sh"
 
+# File for dynamic overlay
+DYNAMIC_OVERLAY_FILE="/tmp/dzyga_dynamic_overlay.txt"
+DYNAMIC_OVERLAY_UPDATER="$SCRIPT_DIR/update_dynamic_overlay.sh"
+
 # Function to check if we should stream based on scan state
 # $1 - threshold: 1=fast/sensitive (for initial check), 2=tolerant (for monitoring)
 should_stream() {
-    local threshold=${1:-1}
+    local threshold=${1}
     
     # In overlay mode, always stream (scanning indicator shown in overlay)
     # In always mode, always stream (ignore scanning)
@@ -139,11 +146,11 @@ get_position_coords() {
             ;;
         "bottom-left")
             x_coord="10"
-            y_coord="(h-text_h-10)"
+            y_coord="(h-text_h-60)"
             ;;
         "bottom-right")
             x_coord="(w-text_w-10)"
-            y_coord="(h-text_h-10)"
+            y_coord="(h-text_h-60)"
             ;;
         *)
             x_coord="10"
@@ -154,22 +161,45 @@ get_position_coords() {
     echo "${x_coord}:${y_coord}"
 }
 
-# Set default values
-OVERLAY_FONTSIZE=${OVERLAY_FONTSIZE:-20}
-OVERLAY_BG_OPACITY=${OVERLAY_BG_OPACITY:-0.5}
-OVERLAY_TEXT_OPACITY=${OVERLAY_TEXT_OPACITY:-1.0}
-VIDEO_CRF=${VIDEO_CRF:-30}
-VIDEO_FPS=${VIDEO_FPS:-25}
-OVERLAY_POSITION=${OVERLAY_POSITION:-top-left}
-FREQUENCY_POSITION=${FREQUENCY_POSITION:-bottom-left}
-STREAM_MODE=${STREAM_MODE:-always}
+# Unified function to create drawtext filter
+# Usage: create_drawtext_filter <file_or_text> <position> <fontsize> <color> <text_opacity> <border_width> <border_color> <bg_color> <bg_opacity> <is_file>
+create_drawtext_filter() {
+    local content=$1
+    local position=$2
+    local fontsize=$3
+    local color=$4
+    local text_opacity=$5
+    local border_width=$6
+    local border_color=$7
+    local bg_color=$8
+    local bg_opacity=$9
+    local is_file=${10}
+    
+    local coords=$(get_position_coords "$position")
+    local x_coord="${coords%:*}"
+    local y_coord="${coords#*:}"
+    
+    if [ "$is_file" = "true" ]; then
+        local text_param="textfile='${content}':reload=1"
+    else
+        local text_param="text='${content}'"
+    fi
+    
+    if [ "$border_width" -gt 0 ]; then
+        # Use border for readability
+        echo "drawtext=${text_param}:fontsize=${fontsize}:fontcolor=${color}@${text_opacity}:borderw=${border_width}:bordercolor=${border_color}:x=${x_coord}:y=${y_coord}"
+    else
+        # Use background box
+        echo "drawtext=${text_param}:fontsize=${fontsize}:fontcolor=${color}@${text_opacity}:box=1:boxcolor=${bg_color}@${bg_opacity}:boxborderw=5:x=${x_coord}:y=${y_coord}"
+    fi
+}
 
 # Calculate GOP (keyframe interval) based on FPS
 # GOP = FPS * 2 (keyframe every 2 seconds)
 VIDEO_GOP=$((VIDEO_FPS * 2))
 
 # Build video filter and encoding parameters
-if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
+if [ "$OVERLAY_ENABLED" = "true" ]; then
     
     # Build filter
     VF_FILTER=""
@@ -177,8 +207,7 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
     # Static overlay text
     if [ -n "$OVERLAY_TEXT" ]; then
         log "Overlay text: $OVERLAY_TEXT (position: $OVERLAY_POSITION)"
-        OVERLAY_COORDS=$(get_position_coords "$OVERLAY_POSITION")
-        VF_FILTER="drawtext=text='${OVERLAY_TEXT}':fontsize=${OVERLAY_FONTSIZE}:fontcolor=white@${OVERLAY_TEXT_OPACITY}:box=1:boxcolor=black@${OVERLAY_BG_OPACITY}:boxborderw=5:x=${OVERLAY_COORDS%:*}:y=${OVERLAY_COORDS#*:}"
+        VF_FILTER=$(create_drawtext_filter "$OVERLAY_TEXT" "$OVERLAY_POSITION" "$OVERLAY_FONTSIZE_CUSTOM" "$OVERLAY_TEXT_COLOR" "$OVERLAY_TEXT_OPACITY_CUSTOM" "$OVERLAY_BORDER_WIDTH" "$OVERLAY_BORDER_COLOR" "$OVERLAY_BG_COLOR" "$OVERLAY_BG_OPACITY_CUSTOM" false)
     fi
     
     # Dynamic frequency
@@ -200,9 +229,8 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
             log "WARNING: Frequency update script not found: $FREQ_UPDATER"
         fi
         
-        # Add frequency filter
-        FREQ_COORDS=$(get_position_coords "$FREQUENCY_POSITION")
-        FREQ_FILTER="drawtext=textfile='${FREQ_FILE}':reload=1:fontsize=${OVERLAY_FONTSIZE}:fontcolor=yellow@${OVERLAY_TEXT_OPACITY}:box=1:boxcolor=black@${OVERLAY_BG_OPACITY}:boxborderw=5:x=${FREQ_COORDS%:*}:y=${FREQ_COORDS#*:}"
+        # Add frequency filter with configurable display parameters
+        FREQ_FILTER=$(create_drawtext_filter "$FREQ_FILE" "$FREQUENCY_POSITION" "$FREQUENCY_FONTSIZE" "$FREQUENCY_TEXT_COLOR" "$FREQUENCY_TEXT_OPACITY" "$FREQUENCY_BORDER_WIDTH" "$FREQUENCY_BORDER_COLOR" "$FREQUENCY_BG_COLOR" "$FREQUENCY_BG_OPACITY" true)
         
         if [ -n "$VF_FILTER" ]; then
             VF_FILTER="${VF_FILTER},${FREQ_FILTER}"
@@ -211,8 +239,38 @@ if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
         fi
     fi
     
+    # Dynamic overlay (always available when overlay enabled)
+    log "Dynamic overlay: available (position: $DYNAMIC_OVERLAY_POSITION)"
+    
+    # Initialize dynamic overlay file
+    rm -f "$DYNAMIC_OVERLAY_FILE"
+    echo "" > "$DYNAMIC_OVERLAY_FILE"
+    chmod 666 "$DYNAMIC_OVERLAY_FILE"
+    
+    # Start dynamic overlay updater in background
+    if [ -x "$DYNAMIC_OVERLAY_UPDATER" ]; then
+        "$DYNAMIC_OVERLAY_UPDATER" &
+        DYNAMIC_OVERLAY_PID=$!
+        trap "kill $DYNAMIC_OVERLAY_PID 2>/dev/null; kill $FREQ_PID 2>/dev/null" EXIT
+        log "Started dynamic overlay updater (PID: $DYNAMIC_OVERLAY_PID)"
+    else
+        log "WARNING: Dynamic overlay update script not found: $DYNAMIC_OVERLAY_UPDATER"
+    fi
+    
+    # Build dynamic overlay filter
+    DYNAMIC_FILTER=$(create_drawtext_filter "$DYNAMIC_OVERLAY_FILE" "$DYNAMIC_OVERLAY_POSITION" "$DYNAMIC_OVERLAY_FONTSIZE" "$DYNAMIC_OVERLAY_TEXT_COLOR" "$DYNAMIC_OVERLAY_TEXT_OPACITY" "$DYNAMIC_OVERLAY_BORDER_WIDTH" "$DYNAMIC_OVERLAY_BORDER_COLOR" "$DYNAMIC_OVERLAY_BG_COLOR" "$DYNAMIC_OVERLAY_BG_OPACITY" true)
+    
+    if [ -n "$VF_FILTER" ]; then
+        VF_FILTER="${VF_FILTER},${DYNAMIC_FILTER}"
+    else
+        VF_FILTER="$DYNAMIC_FILTER"
+    fi
+    
     log "Using optimized software encoding (libx264)"
-    log "Parameters: CRF=${VIDEO_CRF}, FPS=${VIDEO_FPS}, GOP=${VIDEO_GOP}, font size=${OVERLAY_FONTSIZE}"
+    log "Parameters: CRF=${VIDEO_CRF}, FPS=${VIDEO_FPS}, GOP=${VIDEO_GOP}"
+    log "Static overlay: font size=${OVERLAY_FONTSIZE_CUSTOM}, color=${OVERLAY_TEXT_COLOR}"
+    log "Frequency: font size=${FREQUENCY_FONTSIZE}, color=${FREQUENCY_TEXT_COLOR}"
+    log "Dynamic overlay: font size=${DYNAMIC_OVERLAY_FONTSIZE}, color=${DYNAMIC_OVERLAY_TEXT_COLOR}"
     
     # Build video encoding options
     VIDEO_OPTS="-vf \"$VF_FILTER\" -r ${VIDEO_FPS} -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -crf ${VIDEO_CRF} -g ${VIDEO_GOP} -sc_threshold 0 -threads 2"
@@ -245,7 +303,7 @@ while true; do
         fi
         
         # Build video encoding parameters and run in background
-        if [ -n "$OVERLAY_TEXT" ] || [ "$SHOW_FREQUENCY" = "true" ]; then
+        if [ "$OVERLAY_ENABLED" = "true" ]; then
             # With overlay - need to encode
             ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
                 $INPUT_PARAMS \

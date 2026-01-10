@@ -11,6 +11,7 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent
 CONFIG_FILE = PROJECT_ROOT / 'config' / 'stream.conf'
 CONFIG_TEMPLATE = PROJECT_ROOT / 'config' / 'stream.conf.template'
+DEFAULTS_FILE = PROJECT_ROOT / 'config' / 'defaults.conf'
 VERSION_FILE = PROJECT_ROOT / 'VERSION'
 
 def get_version():
@@ -30,6 +31,29 @@ def is_config_ready(config: dict) -> bool:
     if '__RTMP_URL__' in rtmp:
         return False
     return True
+
+def parse_defaults():
+    """Parse default values from defaults.conf file."""
+    defaults = {}
+    
+    if not DEFAULTS_FILE.exists():
+        return defaults
+    
+    with open(DEFAULTS_FILE, 'r') as f:
+        for line in f:
+            line_stripped = line.strip()
+            if line_stripped and not line_stripped.startswith('#') and '=' in line_stripped:
+                key, value = line_stripped.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                
+                # Remove quotes if present
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                
+                defaults[key] = value
+    
+    return defaults
 
 def parse_config():
     """Parse configuration file into a dictionary."""
@@ -70,6 +94,12 @@ def parse_config():
                 current_comment = []
         elif not line_stripped:
             current_comment = []
+    
+    # Apply default values for missing configuration parameters
+    defaults = parse_defaults()
+    for key, default_value in defaults.items():
+        if key not in config:
+            config[key] = default_value
     
     return config, comments
 
@@ -400,6 +430,143 @@ def install_update():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dynamic-overlay', methods=['GET'])
+def get_dynamic_overlay():
+    """API endpoint to get current dynamic overlay text and scanning state."""
+    try:
+        dynamic_file = Path('/tmp/dzyga_dynamic_overlay.txt')
+        scanning_state_file = Path('/tmp/dzyga_scanning_state.txt')
+        
+        text = ''
+        if dynamic_file.exists():
+            text = dynamic_file.read_text().strip()
+        
+        scanning = 'stable'
+        if scanning_state_file.exists():
+            scanning = scanning_state_file.read_text().strip()
+        
+        return jsonify({'text': text, 'scanning': scanning})
+    except Exception as e:
+        return jsonify({'text': '', 'scanning': 'stable', 'error': str(e)})
+
+@app.route('/api/dynamic-overlay', methods=['POST'])
+def set_dynamic_overlay():
+    """API endpoint to update dynamic overlay text without restarting stream."""
+    try:
+        data = request.json
+        text = data.get('text', '')
+        
+        # Write to dynamic overlay file
+        dynamic_file = Path('/tmp/dzyga_dynamic_overlay.txt')
+        dynamic_file.write_text(text)
+        dynamic_file.chmod(0o666)
+        
+        # Update last frequency file to current frequency to prevent immediate clearing
+        freq_script = PROJECT_ROOT / 'scripts' / 'get_frequency.sh'
+        last_freq_file = Path('/tmp/dzyga_last_freq_dynamic.txt')
+        
+        try:
+            result = subprocess.run(
+                ['sudo', 'bash', str(freq_script)],
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+            if result.returncode == 0:
+                current_freq = result.stdout.strip()
+                last_freq_file.write_text(current_freq)
+                last_freq_file.chmod(0o666)
+        except:
+            pass
+        
+        return jsonify({'success': True, 'message': 'Dynamic overlay updated'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/power-settings', methods=['GET'])
+def get_power_settings():
+    """API endpoint to get current power saving settings."""
+    try:
+        config, _ = parse_config()
+        
+        # Get current system state
+        wifi_blocked = False
+        bluetooth_blocked = False
+        eth_speed = 'auto'
+        eth_autoneg = 'on'
+        
+        try:
+            result = subprocess.run(['rfkill', 'list'], capture_output=True, text=True)
+            if 'Wireless LAN' in result.stdout:
+                wifi_blocked = 'Soft blocked: yes' in result.stdout
+            if 'Bluetooth' in result.stdout:
+                bluetooth_blocked = 'Soft blocked: yes' in result.stdout
+        except:
+            pass
+        
+        
+        try:
+            result = subprocess.run(['ethtool', 'eth0'], capture_output=True, text=True)
+            for line in result.stdout.split('\n'):
+                if 'Speed:' in line:
+                    if '100Mb/s' in line:
+                        eth_speed = '100'
+                    elif '1000Mb/s' in line or '1Gb/s' in line:
+                        eth_speed = '1000'
+                if 'Auto-negotiation:' in line:
+                    eth_autoneg = 'on' if 'on' in line else 'off'
+        except:
+            pass
+        
+        return jsonify({
+            'config': {
+                'POWER_SAVE_WIFI': config.get('POWER_SAVE_WIFI', 'false'),
+                'POWER_SAVE_BLUETOOTH': config.get('POWER_SAVE_BLUETOOTH', 'false'),
+                'POWER_SAVE_ETH_SPEED': config.get('POWER_SAVE_ETH_SPEED', 'auto'),
+                'POWER_SAVE_ETH_AUTONEG': config.get('POWER_SAVE_ETH_AUTONEG', 'on')
+            },
+            'current': {
+                'wifi_blocked': wifi_blocked,
+                'bluetooth_blocked': bluetooth_blocked,
+                'eth_speed': eth_speed,
+                'eth_autoneg': eth_autoneg
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/power-settings', methods=['POST'])
+def apply_power_settings():
+    """API endpoint to apply power saving settings."""
+    try:
+        data = request.json
+        
+        # Read current config
+        config, _ = parse_config()
+        
+        # Update power settings
+        config['POWER_SAVE_WIFI'] = data.get('POWER_SAVE_WIFI', 'false')
+        config['POWER_SAVE_BLUETOOTH'] = data.get('POWER_SAVE_BLUETOOTH', 'false')
+        config['POWER_SAVE_HDMI'] = data.get('POWER_SAVE_HDMI', 'false')
+        config['POWER_SAVE_ETH_SPEED'] = data.get('POWER_SAVE_ETH_SPEED', 'auto')
+        config['POWER_SAVE_ETH_AUTONEG'] = data.get('POWER_SAVE_ETH_AUTONEG', 'on')
+        
+        # Save config
+        success, message = save_config(config)
+        if not success:
+            return jsonify({'success': False, 'error': message}), 500
+        
+        # Apply settings immediately
+        script_path = PROJECT_ROOT / 'scripts' / 'apply_power_settings.sh'
+        result = os.system(f'sudo bash {script_path}')
+        
+        if result == 0:
+            return jsonify({'success': True, 'message': 'Налаштування енергозбереження застосовано'})
+        else:
+            return jsonify({'success': False, 'error': 'Не вдалося застосувати налаштування'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8081, debug=False)

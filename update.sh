@@ -29,9 +29,12 @@ echo ""
 
 # Step 2: Check service status BEFORE install
 echo "[2/5] Checking service status..."
-STREAM_WAS_ACTIVE=$(sudo systemctl is-active forpost-stream 2>/dev/null || echo "inactive")
-UDP_WAS_ACTIVE=$(sudo systemctl is-active forpost-udp-proxy 2>/dev/null || echo "inactive")
-echo "Stream: $STREAM_WAS_ACTIVE, UDP Proxy: $UDP_WAS_ACTIVE"
+if [ ! -f "$SCRIPT_DIR/scripts/service_manager.sh" ] && [ -f "$SCRIPT_DIR/scripts/service_manager.sh.template" ]; then
+    cp "$SCRIPT_DIR/scripts/service_manager.sh.template" "$SCRIPT_DIR/scripts/service_manager.sh"
+fi
+source "$SCRIPT_DIR/scripts/service_manager.sh"
+ACTIVE_SERVICES=$(get_active_services)
+echo "Active services: ${ACTIVE_SERVICES:-none}"
 echo ""
 
 # Step 3: Run install script
@@ -56,23 +59,11 @@ echo ""
 
 # Step 5: Restart stream services (if they were running before)
 echo "[5/5] Restarting stream services..."
-STREAM_ACTIVE="$STREAM_WAS_ACTIVE"
-UDP_ACTIVE="$UDP_WAS_ACTIVE"
-
-if [ "$STREAM_ACTIVE" = "active" ]; then
-    echo "Restarting stream service..."
-    sudo systemctl restart forpost-stream
-    echo "✓ Stream service restarted"
+if [ -n "$ACTIVE_SERVICES" ]; then
+    restart_active_services $ACTIVE_SERVICES
+    echo "✓ Services restarted"
 else
-    echo "Stream service is not running (skipped)"
-fi
-
-if [ "$UDP_ACTIVE" = "active" ]; then
-    echo "Restarting UDP proxy..."
-    sudo systemctl restart forpost-udp-proxy
-    echo "✓ UDP proxy restarted"
-else
-    echo "UDP proxy is not running (skipped)"
+    echo "No stream services were running (skipped)"
 fi
 
 echo ""
