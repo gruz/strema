@@ -1,12 +1,11 @@
 <!DOCTYPE html>
 <html lang="uk">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FORPOST Stream - Конфігурація</title>
-    <link rel="stylesheet" href="/static/header_styles.css">
     <style>
-        
         * {
             margin: 0;
             padding: 0;
@@ -160,16 +159,24 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         @keyframes blink-red {
-            0%, 100% { 
+
+            0%,
+            100% {
                 border-color: #ccc;
                 box-shadow: none;
             }
-            50% { 
+
+            50% {
                 border-color: #dc3545;
                 box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
             }
@@ -302,8 +309,104 @@
             background: #dc3545;
             color: white;
         }
+
+        /* Header styles */
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .cpu-mode-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 12px;
+            margin-left: 8px;
+        }
+
+        .cpu-normal {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .cpu-high {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .nav-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+
+        .nav-btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .nav-btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .nav-btn-secondary:hover {
+            background: #e0e0e0;
+        }
     </style>
 </head>
+
 <body>
     <div id="updateOverlay" class="update-overlay">
         <div class="spinner"></div>
@@ -327,14 +430,20 @@
 
 
         <div class="card" id="updateCard">
-            <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="toggleUpdateSection()">
-                <span>🔄 Оновлення системи <span style="font-size: 12px; color: #999;">(версія: <span id="currentVersionBadge">...</span>)</span> <span id="newVersionBadge" style="display: none; background: #28a745; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">НОВА ВЕРСІЯ</span></span>
+            <div class="section-title"
+                style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+                onclick="toggleUpdateSection()">
+                <span>🔄 Оновлення системи <span style="font-size: 12px; color: #999;">(версія: <span
+                            id="currentVersionBadge">...</span>)</span> <span id="newVersionBadge"
+                        style="display: none; background: #28a745; color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">НОВА
+                        ВЕРСІЯ</span></span>
                 <span id="updateToggleIcon" style="font-size: 20px;">▼</span>
             </div>
-            
+
             <div id="updateContent" style="display: none; margin-top: 12px;">
                 <div style="margin-bottom: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                         <div>
                             <strong>Поточна версія:</strong> <span id="currentVersion">...</span>
                         </div>
@@ -348,11 +457,12 @@
                             </label>
                         </div>
                     </div>
-                    
-                    <div id="updateAvailable" style="display: none; background: #d4edda; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+
+                    <div id="updateAvailable"
+                        style="display: none; background: #d4edda; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
                         <strong style="color: #155724;">✨ Доступне оновлення: <span id="latestVersion"></span></strong>
                     </div>
-                    
+
                     <div id="updatesList"></div>
                 </div>
             </div>
@@ -360,7 +470,7 @@
 
         <div class="card">
             <div class="section-title">Керування стрімінгом</div>
-            
+
             <div class="button-group">
                 <button type="button" class="btn btn-primary" id="startBtn">
                     ▶️ Запустити стрім
@@ -378,7 +488,8 @@
                     <input type="checkbox" id="autostartCheckbox" style="width: auto; margin-right: 8px;">
                     Автозапуск стріму при завантаженні системи
                 </label>
-                <span class="help-text">Якщо увімкнено, то трансляція у Вежу стартує при включенні Дзиги. Інакше її треба вручну запустити через цей інтерфейс.</span>
+                <span class="help-text">Якщо увімкнено, то трансляція у Вежу стартує при включенні Дзиги. Інакше її
+                    треба вручну запустити через цей інтерфейс.</span>
             </div>
 
             <div class="form-group">
@@ -397,44 +508,56 @@
 
         <div class="card">
             <div class="section-title">🔧 Діагностика</div>
-            
-            <div style="background: #d1ecf1; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #17a2b8;">
+
+            <div
+                style="background: #d1ecf1; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #17a2b8;">
                 <strong style="color: #0c5460;">🔄 Reset RP2040:</strong>
                 <p style="margin: 8px 0 0 0; font-size: 13px; color: #0c5460;">
-                    Спробувати при помилці "No serial port" або зависанні контролера частот (багато "No data > 2s" у логах). Виконує м'який reset без переривання роботи системи.
+                    Спробувати при помилці "No serial port" або зависанні контролера частот (багато "No data > 2s" у
+                    логах). Виконує м'який reset без переривання роботи системи.
                 </p>
             </div>
 
-            <div style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #ffc107;">
+            <div
+                style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #ffc107;">
                 <strong style="color: #856404;">🔄 Перезавантаження Dzyga:</strong>
                 <p style="margin: 8px 0 0 0; font-size: 13px; color: #856404;">
-                    Перезавантажує модуль пошуку частот. Використовувати при проблемах з підключенням до RP2040 або зависанні сервіса.
+                    Перезавантажує модуль пошуку частот. Використовувати при проблемах з підключенням до RP2040 або
+                    зависанні сервіса.
                 </p>
             </div>
 
             <div class="button-group">
-                <button type="button" class="btn btn-secondary" id="resetRp2040Btn" style="background: #ffc107; color: #333;">
+                <button type="button" class="btn btn-secondary" id="resetRp2040Btn"
+                    style="background: #ffc107; color: #333;">
                     🔄 Reset RP2040
                 </button>
-                <button type="button" class="btn btn-secondary" id="restartDzygaBtn" style="background: #17a2b8; color: white;">
+                <button type="button" class="btn btn-secondary" id="restartDzygaBtn"
+                    style="background: #17a2b8; color: white;">
                     🔄 Перезавантажити Dzyga
                 </button>
             </div>
 
-            <div id="rp2040ResetStatus" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
+            <div id="rp2040ResetStatus"
+                style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
         </div>
 
         <div class="card">
-            <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="togglePowerSettings()">
-                <span>⚡ Енергозбереження <span style="font-size: 12px; color: #999;">(для довгих PoE кабелів)</span></span>
+            <div class="section-title"
+                style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+                onclick="togglePowerSettings()">
+                <span>⚡ Енергозбереження <span style="font-size: 12px; color: #999;">(для довгих PoE
+                        кабелів)</span></span>
                 <span id="powerSettingsIcon" style="font-size: 20px;">▼</span>
             </div>
-            
+
             <div id="powerSettingsSection" style="display: none; margin-top: 12px;">
-                <div style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #ffc107;">
+                <div
+                    style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #ffc107;">
                     <strong style="color: #856404;">💡 Коли використовувати:</strong>
                     <p style="margin: 8px 0 0 0; font-size: 13px; color: #856404;">
-                        При живленні через PoE на відстані 80-100м можливі проблеми зі стабільністю через падіння напруги. 
+                        При живленні через PoE на відстані 80-100м можливі проблеми зі стабільністю через падіння
+                        напруги.
                         Вимкнення невикористовуваних компонентів зменшує споживання на 2-3W і підвищує стабільність.
                     </p>
                 </div>
@@ -458,7 +581,8 @@
 
                 <div class="form-group">
                     <label for="powerSaveEthSpeed">Швидкість Ethernet</label>
-                    <span class="help-text">100Mbps споживає менше енергії і стабільніший на довгих кабелях. Вимкнення auto-negotiation запобігає Link Down/Up циклам.</span>
+                    <span class="help-text">100Mbps споживає менше енергії і стабільніший на довгих кабелях. Вимкнення
+                        auto-negotiation запобігає Link Down/Up циклам.</span>
                     <select id="powerSaveEthSpeed">
                         <option value="auto">Авто (1000Mbps з auto-negotiation)</option>
                         <option value="1000">1000Mbps без auto-negotiation</option>
@@ -466,7 +590,8 @@
                     </select>
                 </div>
 
-                <div style="background: #d1ecf1; padding: 12px; border-radius: 8px; margin: 16px 0; border-left: 4px solid #17a2b8;">
+                <div
+                    style="background: #d1ecf1; padding: 12px; border-radius: 8px; margin: 16px 0; border-left: 4px solid #17a2b8;">
                     <strong style="color: #0c5460;">📊 Поточний стан:</strong>
                     <div style="margin-top: 8px; font-size: 13px; color: #0c5460;">
                         <div>WiFi: <span id="currentWifiState">...</span></div>
@@ -497,247 +622,286 @@
             <!-- Form Tab Content -->
             <div id="formTabContent" class="tab-content">
                 <form id="configForm">
-                <div class="section-title">Основні налаштування</div>
+                    <div class="section-title">Основні налаштування</div>
 
-                <div class="form-group">
-                    <label for="RTMP_URL">RTMP URL</label>
-                    <span class="help-text">Повний URL для стріму (напр. rtmps://server:port/app/key)</span>
-                    <input type="text" id="RTMP_URL" name="RTMP_URL" required>
-                </div>
-
-                <div class="section-title">Оверлей на відео</div>
-
-                <div class="form-group">
-                    <label for="OVERLAY_ENABLED">Увімкнути оверлей</label>
-                    <span class="help-text" style="color: #d9534f; font-weight: 600;">⚠️ УВАГА: Оверлей збільшує навантаження на CPU і вимикає копіювання стріму (використовується перекодування)</span>
-                    <select id="OVERLAY_ENABLED" name="OVERLAY_ENABLED">
-                        <option value="true" selected>Так</option>
-                        <option value="false">Ні</option>
-                    </select>
-                </div>
-
-                <div id="overlayOptionsSection" style="display: block;">
-                    <!-- Static Overlay -->
-                    <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px;" onclick="toggleStaticOverlay()">
-                        <span>📝 Статичний текст</span>
-                        <span id="staticOverlayIcon" style="font-size: 20px;">▼</span>
+                    <div class="form-group">
+                        <label for="RTMP_URL">RTMP URL</label>
+                        <span class="help-text">Повний URL для стріму (напр. rtmps://server:port/app/key)</span>
+                        <input type="text" id="RTMP_URL" name="RTMP_URL" required>
                     </div>
-                    
-                    <div id="staticOverlaySection" style="display: none; margin: 12px 0; padding: 20px; background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;">
-                        <div class="form-group">
-                            <label for="OVERLAY_TEXT">Текст оверлею</label>
-                            <span class="help-text">Статичний текст, який завжди відображається на відео. Наприклад, номер пристрою, умовне позначення</span>
-                            <input type="text" id="OVERLAY_TEXT" name="OVERLAY_TEXT" placeholder="Наприклад: [N] дзига">
+
+                    <div class="section-title">Оверлей на відео</div>
+
+                    <div class="form-group">
+                        <label for="OVERLAY_ENABLED">Увімкнути оверлей</label>
+                        <span class="help-text" style="color: #d9534f; font-weight: 600;">⚠️ УВАГА: Оверлей збільшує
+                            навантаження на CPU і вимикає копіювання стріму (використовується перекодування)</span>
+                        <select id="OVERLAY_ENABLED" name="OVERLAY_ENABLED">
+                            <option value="true" selected>Так</option>
+                            <option value="false">Ні</option>
+                        </select>
+                    </div>
+
+                    <div id="overlayOptionsSection" style="display: block;">
+                        <!-- Static Overlay -->
+                        <div class="section-title"
+                            style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px;"
+                            onclick="toggleStaticOverlay()">
+                            <span>📝 Статичний текст</span>
+                            <span id="staticOverlayIcon" style="font-size: 20px;">▼</span>
                         </div>
 
-                        <div class="form-group">
-                            <label for="OVERLAY_POSITION">Позиція тексту</label>
-                            <select id="OVERLAY_POSITION" name="OVERLAY_POSITION">
-                                <option value="top-left">Зверху зліва</option>
-                                <option value="top-right">Зверху справа</option>
-                                <option value="bottom-left">Знизу зліва</option>
-                                <option value="bottom-right">Знизу справа</option>
-                            </select>
-                        </div>
-
-                        <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 14px;" onclick="toggleStaticSettings()">
-                            <span>⚙️ Налаштування відображення</span>
-                            <span id="staticSettingsIcon" style="font-size: 16px;">▼</span>
-                        </div>
-                        
-                        <div id="staticSettings" style="display: none; margin: 12px 0; padding: 15px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px;">
+                        <div id="staticOverlaySection"
+                            style="display: none; margin: 12px 0; padding: 20px; background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;">
                             <div class="form-group">
-                                <label for="OVERLAY_FONTSIZE_CUSTOM">Розмір шрифту</label>
-                                <input type="number" id="OVERLAY_FONTSIZE_CUSTOM" name="OVERLAY_FONTSIZE_CUSTOM" value="20" min="8" max="72">
+                                <label for="OVERLAY_TEXT">Текст оверлею</label>
+                                <span class="help-text">Статичний текст, який завжди відображається на відео. Наприклад,
+                                    номер пристрою, умовне позначення</span>
+                                <input type="text" id="OVERLAY_TEXT" name="OVERLAY_TEXT"
+                                    placeholder="Наприклад: [N] дзига">
                             </div>
 
                             <div class="form-group">
-                                <label for="OVERLAY_TEXT_COLOR">Колір тексту</label>
-                                <select id="OVERLAY_TEXT_COLOR" name="OVERLAY_TEXT_COLOR">
-                                    <option value="white" selected>Білий</option>
-                                    <option value="yellow">Жовтий</option>
-                                    <option value="red">Червоний</option>
-                                    <option value="green">Зелений</option>
-                                    <option value="blue">Синій</option>
-                                    <option value="orange">Помаранчевий</option>
-                                    <option value="cyan">Блакитний</option>
-                                    <option value="magenta">Пурпурний</option>
+                                <label for="OVERLAY_POSITION">Позиція тексту</label>
+                                <select id="OVERLAY_POSITION" name="OVERLAY_POSITION">
+                                    <option value="top-left">Зверху зліва</option>
+                                    <option value="top-right">Зверху справа</option>
+                                    <option value="bottom-left">Знизу зліва</option>
+                                    <option value="bottom-right">Знизу справа</option>
+                                </select>
+                            </div>
+
+                            <div class="section-title"
+                                style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 14px;"
+                                onclick="toggleStaticSettings()">
+                                <span>⚙️ Налаштування відображення</span>
+                                <span id="staticSettingsIcon" style="font-size: 16px;">▼</span>
+                            </div>
+
+                            <div id="staticSettings"
+                                style="display: none; margin: 12px 0; padding: 15px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px;">
+                                <div class="form-group">
+                                    <label for="OVERLAY_FONTSIZE_CUSTOM">Розмір шрифту</label>
+                                    <input type="number" id="OVERLAY_FONTSIZE_CUSTOM" name="OVERLAY_FONTSIZE_CUSTOM"
+                                        value="20" min="8" max="72">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="OVERLAY_TEXT_COLOR">Колір тексту</label>
+                                    <select id="OVERLAY_TEXT_COLOR" name="OVERLAY_TEXT_COLOR">
+                                        <option value="white" selected>Білий</option>
+                                        <option value="yellow">Жовтий</option>
+                                        <option value="red">Червоний</option>
+                                        <option value="green">Зелений</option>
+                                        <option value="blue">Синій</option>
+                                        <option value="orange">Помаранчевий</option>
+                                        <option value="cyan">Блакитний</option>
+                                        <option value="magenta">Пурпурний</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="OVERLAY_TEXT_OPACITY_CUSTOM">Прозорість тексту (0.0 - 1.0)</label>
+                                    <input type="number" id="OVERLAY_TEXT_OPACITY_CUSTOM"
+                                        name="OVERLAY_TEXT_OPACITY_CUSTOM" value="1.0" min="0" max="1" step="0.1">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="OVERLAY_BORDER_WIDTH">Товщина обводки (0 = фон)</label>
+                                    <span class="help-text">Обводка робить текст читабельним на будь-якому тлі</span>
+                                    <input type="number" id="OVERLAY_BORDER_WIDTH" name="OVERLAY_BORDER_WIDTH" value="0"
+                                        min="0" max="10">
+                                </div>
+
+                                <div id="staticBgGroup" style="display: block;">
+                                    <div class="form-group">
+                                        <label for="OVERLAY_BG_COLOR">Колір фону</label>
+                                        <select id="OVERLAY_BG_COLOR" name="OVERLAY_BG_COLOR">
+                                            <option value="black" selected>Чорний</option>
+                                            <option value="white">Білий</option>
+                                            <option value="red">Червоний</option>
+                                            <option value="green">Зелений</option>
+                                            <option value="blue">Синій</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="OVERLAY_BG_OPACITY_CUSTOM">Прозорість фону (0.0 - 1.0)</label>
+                                        <input type="number" id="OVERLAY_BG_OPACITY_CUSTOM"
+                                            name="OVERLAY_BG_OPACITY_CUSTOM" value="0.5" min="0" max="1" step="0.1">
+                                    </div>
+                                </div>
+
+                                <div id="staticBorderGroup" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="OVERLAY_BORDER_COLOR">Колір обводки</label>
+                                        <select id="OVERLAY_BORDER_COLOR" name="OVERLAY_BORDER_COLOR">
+                                            <option value="black" selected>Чорний</option>
+                                            <option value="white">Білий</option>
+                                            <option value="red">Червоний</option>
+                                            <option value="green">Зелений</option>
+                                            <option value="blue">Синій</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Frequency Display -->
+                        <div class="section-title"
+                            style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px;"
+                            onclick="toggleFrequencyOverlay()">
+                            <span>📡 Відображення частоти</span>
+                            <span id="frequencyOverlayIcon" style="font-size: 20px;">▼</span>
+                        </div>
+
+                        <div id="frequencyOverlaySection"
+                            style="display: none; margin: 12px 0; padding: 20px; background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;">
+                            <div class="form-group">
+                                <label for="SHOW_FREQUENCY">Показувати частоту</label>
+                                <select id="SHOW_FREQUENCY" name="SHOW_FREQUENCY">
+                                    <option value="true">Так</option>
+                                    <option value="false">Ні</option>
                                 </select>
                             </div>
 
                             <div class="form-group">
-                                <label for="OVERLAY_TEXT_OPACITY_CUSTOM">Прозорість тексту (0.0 - 1.0)</label>
-                                <input type="number" id="OVERLAY_TEXT_OPACITY_CUSTOM" name="OVERLAY_TEXT_OPACITY_CUSTOM" value="1.0" min="0" max="1" step="0.1">
-                            </div>
-
-                            <div class="form-group">
-                                <label for="OVERLAY_BORDER_WIDTH">Товщина обводки (0 = фон)</label>
-                                <span class="help-text">Обводка робить текст читабельним на будь-якому тлі</span>
-                                <input type="number" id="OVERLAY_BORDER_WIDTH" name="OVERLAY_BORDER_WIDTH" value="0" min="0" max="10">
-                            </div>
-
-                            <div id="staticBgGroup" style="display: block;">
-                                <div class="form-group">
-                                    <label for="OVERLAY_BG_COLOR">Колір фону</label>
-                                    <select id="OVERLAY_BG_COLOR" name="OVERLAY_BG_COLOR">
-                                        <option value="black" selected>Чорний</option>
-                                        <option value="white">Білий</option>
-                                        <option value="red">Червоний</option>
-                                        <option value="green">Зелений</option>
-                                        <option value="blue">Синій</option>
-                                    </select>
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="OVERLAY_BG_OPACITY_CUSTOM">Прозорість фону (0.0 - 1.0)</label>
-                                    <input type="number" id="OVERLAY_BG_OPACITY_CUSTOM" name="OVERLAY_BG_OPACITY_CUSTOM" value="0.5" min="0" max="1" step="0.1">
-                                </div>
-                            </div>
-
-                            <div id="staticBorderGroup" style="display: none;">
-                                <div class="form-group">
-                                    <label for="OVERLAY_BORDER_COLOR">Колір обводки</label>
-                                    <select id="OVERLAY_BORDER_COLOR" name="OVERLAY_BORDER_COLOR">
-                                        <option value="black" selected>Чорний</option>
-                                        <option value="white">Білий</option>
-                                        <option value="red">Червоний</option>
-                                        <option value="green">Зелений</option>
-                                        <option value="blue">Синій</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Frequency Display -->
-                    <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px;" onclick="toggleFrequencyOverlay()">
-                        <span>📡 Відображення частоти</span>
-                        <span id="frequencyOverlayIcon" style="font-size: 20px;">▼</span>
-                    </div>
-                    
-                    <div id="frequencyOverlaySection" style="display: none; margin: 12px 0; padding: 20px; background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;">
-                        <div class="form-group">
-                            <label for="SHOW_FREQUENCY">Показувати частоту</label>
-                            <select id="SHOW_FREQUENCY" name="SHOW_FREQUENCY">
-                                <option value="true">Так</option>
-                                <option value="false">Ні</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="FREQUENCY_POSITION">Позиція частоти</label>
-                            <select id="FREQUENCY_POSITION" name="FREQUENCY_POSITION">
-                                <option value="top-left">Зверху зліва</option>
-                                <option value="top-right">Зверху справа</option>
-                                <option value="bottom-left">Знизу зліва</option>
-                                <option value="bottom-right">Знизу справа</option>
-                            </select>
-                        </div>
-
-                        <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 14px;" onclick="toggleFrequencySettings()">
-                            <span>⚙️ Налаштування відображення</span>
-                            <span id="frequencySettingsIcon" style="font-size: 16px;">▼</span>
-                        </div>
-                        
-                        <div id="frequencySettings" style="display: none; margin: 12px 0; padding: 15px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px;">
-                            <div class="form-group">
-                                <label for="FREQUENCY_FONTSIZE">Розмір шрифту</label>
-                                <input type="number" id="FREQUENCY_FONTSIZE" name="FREQUENCY_FONTSIZE" value="20" min="8" max="72">
-                            </div>
-
-                            <div class="form-group">
-                                <label for="FREQUENCY_TEXT_COLOR">Колір тексту</label>
-                                <select id="FREQUENCY_TEXT_COLOR" name="FREQUENCY_TEXT_COLOR">
-                                    <option value="white">Білий</option>
-                                    <option value="yellow" selected>Жовтий</option>
-                                    <option value="red">Червоний</option>
-                                    <option value="green">Зелений</option>
-                                    <option value="blue">Синій</option>
-                                    <option value="orange">Помаранчевий</option>
-                                    <option value="cyan">Блакитний</option>
-                                    <option value="magenta">Пурпурний</option>
+                                <label for="FREQUENCY_POSITION">Позиція частоти</label>
+                                <select id="FREQUENCY_POSITION" name="FREQUENCY_POSITION">
+                                    <option value="top-left">Зверху зліва</option>
+                                    <option value="top-right">Зверху справа</option>
+                                    <option value="bottom-left">Знизу зліва</option>
+                                    <option value="bottom-right">Знизу справа</option>
                                 </select>
                             </div>
 
-                            <div class="form-group">
-                                <label for="FREQUENCY_TEXT_OPACITY">Прозорість тексту (0.0 - 1.0)</label>
-                                <input type="number" id="FREQUENCY_TEXT_OPACITY" name="FREQUENCY_TEXT_OPACITY" value="1.0" min="0" max="1" step="0.1">
+                            <div class="section-title"
+                                style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 14px;"
+                                onclick="toggleFrequencySettings()">
+                                <span>⚙️ Налаштування відображення</span>
+                                <span id="frequencySettingsIcon" style="font-size: 16px;">▼</span>
                             </div>
 
-                            <div class="form-group">
-                                <label for="FREQUENCY_BORDER_WIDTH">Товщина обводки (0 = фон)</label>
-                                <span class="help-text">Обводка робить текст читабельним на будь-якому тлі</span>
-                                <input type="number" id="FREQUENCY_BORDER_WIDTH" name="FREQUENCY_BORDER_WIDTH" value="0" min="0" max="10">
-                            </div>
-
-                            <div id="frequencyBgGroup" style="display: block;">
+                            <div id="frequencySettings"
+                                style="display: none; margin: 12px 0; padding: 15px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px;">
                                 <div class="form-group">
-                                    <label for="FREQUENCY_BG_COLOR">Колір фону</label>
-                                    <select id="FREQUENCY_BG_COLOR" name="FREQUENCY_BG_COLOR">
-                                        <option value="black" selected>Чорний</option>
+                                    <label for="FREQUENCY_FONTSIZE">Розмір шрифту</label>
+                                    <input type="number" id="FREQUENCY_FONTSIZE" name="FREQUENCY_FONTSIZE" value="20"
+                                        min="8" max="72">
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="FREQUENCY_TEXT_COLOR">Колір тексту</label>
+                                    <select id="FREQUENCY_TEXT_COLOR" name="FREQUENCY_TEXT_COLOR">
                                         <option value="white">Білий</option>
+                                        <option value="yellow" selected>Жовтий</option>
                                         <option value="red">Червоний</option>
                                         <option value="green">Зелений</option>
                                         <option value="blue">Синій</option>
+                                        <option value="orange">Помаранчевий</option>
+                                        <option value="cyan">Блакитний</option>
+                                        <option value="magenta">Пурпурний</option>
                                     </select>
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="FREQUENCY_BG_OPACITY">Прозорість фону (0.0 - 1.0)</label>
-                                    <input type="number" id="FREQUENCY_BG_OPACITY" name="FREQUENCY_BG_OPACITY" value="0.5" min="0" max="1" step="0.1">
+                                    <label for="FREQUENCY_TEXT_OPACITY">Прозорість тексту (0.0 - 1.0)</label>
+                                    <input type="number" id="FREQUENCY_TEXT_OPACITY" name="FREQUENCY_TEXT_OPACITY"
+                                        value="1.0" min="0" max="1" step="0.1">
                                 </div>
-                            </div>
 
-                            <div id="frequencyBorderGroup" style="display: none;">
                                 <div class="form-group">
-                                    <label for="FREQUENCY_BORDER_COLOR">Колір обводки</label>
-                                    <select id="FREQUENCY_BORDER_COLOR" name="FREQUENCY_BORDER_COLOR">
-                                        <option value="black" selected>Чорний</option>
-                                        <option value="white">Білий</option>
-                                        <option value="red">Червоний</option>
-                                        <option value="green">Зелений</option>
-                                        <option value="blue">Синій</option>
-                                    </select>
+                                    <label for="FREQUENCY_BORDER_WIDTH">Товщина обводки (0 = фон)</label>
+                                    <span class="help-text">Обводка робить текст читабельним на будь-якому тлі</span>
+                                    <input type="number" id="FREQUENCY_BORDER_WIDTH" name="FREQUENCY_BORDER_WIDTH"
+                                        value="0" min="0" max="10">
+                                </div>
+
+                                <div id="frequencyBgGroup" style="display: block;">
+                                    <div class="form-group">
+                                        <label for="FREQUENCY_BG_COLOR">Колір фону</label>
+                                        <select id="FREQUENCY_BG_COLOR" name="FREQUENCY_BG_COLOR">
+                                            <option value="black" selected>Чорний</option>
+                                            <option value="white">Білий</option>
+                                            <option value="red">Червоний</option>
+                                            <option value="green">Зелений</option>
+                                            <option value="blue">Синій</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="FREQUENCY_BG_OPACITY">Прозорість фону (0.0 - 1.0)</label>
+                                        <input type="number" id="FREQUENCY_BG_OPACITY" name="FREQUENCY_BG_OPACITY"
+                                            value="0.5" min="0" max="1" step="0.1">
+                                    </div>
+                                </div>
+
+                                <div id="frequencyBorderGroup" style="display: none;">
+                                    <div class="form-group">
+                                        <label for="FREQUENCY_BORDER_COLOR">Колір обводки</label>
+                                        <select id="FREQUENCY_BORDER_COLOR" name="FREQUENCY_BORDER_COLOR">
+                                            <option value="black" selected>Чорний</option>
+                                            <option value="white">Білий</option>
+                                            <option value="red">Червоний</option>
+                                            <option value="green">Зелений</option>
+                                            <option value="blue">Синій</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Dynamic Overlay -->
-                    <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px;" onclick="toggleDynamicOverlay()">
-                        <span>🔤 Динамічний оверлей</span>
-                        <span id="dynamicOverlayIcon" style="font-size: 20px;">▼</span>
-                    </div>
-                    
-                    <div id="dynamicOverlaySection" style="display: none; margin: 12px 0; padding: 20px; background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;">
-                        <div class="form-group">
+                        <!-- Dynamic Overlay -->
+                        <div class="section-title"
+                            style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px;"
+                            onclick="toggleDynamicOverlay()">
+                            <span>🔤 Динамічний оверлей</span>
+                            <span id="dynamicOverlayIcon" style="font-size: 20px;">▼</span>
+                        </div>
+
+                        <div id="dynamicOverlaySection"
+                            style="display: none; margin: 12px 0; padding: 20px; background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px;">
+                            <div class="form-group">
                                 <label for="dynamicOverlayText">Текст для відображення на відео</label>
                                 <span class="help-text" style="display: block; margin-bottom: 8px;">
-                                    <strong>Призначення:</strong> Виведення інформації про об'єкт на відео (населений пункт, орієнтири, напрям руху, зміни позиції). 
-                                    Наприклад: "Дрон над с.Смертьмоскальське, рух на північ". 
+                                    <strong>Призначення:</strong> Виведення інформації про об'єкт на відео (населений
+                                    пункт, орієнтири, напрям руху, зміни позиції).
+                                    Наприклад: "Дрон над с.Смертьмоскальське, рух на північ".
                                     При переході на іншу частоту текст автоматично очищається, щоб не вводити в оману.
                                 </span>
-                                <span class="help-text">💡 <strong>Керування:</strong> Enter — зберегти текст на відео • Escape або ✕ — очистити • Автоматично зникає при скануванні</span>
+                                <span class="help-text">💡 <strong>Керування:</strong> Enter — зберегти текст на відео •
+                                    Escape або ✕ — очистити • Автоматично зникає при скануванні</span>
                                 <div style="position: relative;">
-                                    <input type="text" id="dynamicOverlayText" placeholder="Введіть текст та натисніть Enter..." style="padding-right: 35px;">
-                                    <button type="button" id="clearDynamicText" style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #999; font-size: 18px; cursor: pointer; padding: 5px 10px; display: none;" title="Очистити текст">✕</button>
+                                    <input type="text" id="dynamicOverlayText"
+                                        placeholder="Введіть текст та натисніть Enter..." style="padding-right: 35px;">
+                                    <button type="button" id="clearDynamicText"
+                                        style="position: absolute; right: 5px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #999; font-size: 18px; cursor: pointer; padding: 5px 10px; display: none;"
+                                        title="Очистити текст">✕</button>
                                 </div>
                             </div>
-                            <div style="margin-top: 8px; padding: 8px 12px; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 8px;" id="scanningStatus">
-                                <span id="scanningIndicator" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #28a745;"></span>
-                                <span id="scanningText" style="font-weight: 600; color: #28a745;">Частота стабільна</span>
+                            <div style="margin-top: 8px; padding: 8px 12px; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 8px;"
+                                id="scanningStatus">
+                                <span id="scanningIndicator"
+                                    style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #28a745;"></span>
+                                <span id="scanningText" style="font-weight: 600; color: #28a745;">Частота
+                                    стабільна</span>
                             </div>
-                            <div style="margin-top: 12px; padding: 12px; background: #f0f0f0; border-radius: 8px; font-size: 13px; color: #666;">
-                                <strong>Поточний текст на відео:</strong> <span id="currentDynamicText" style="color: #333; font-weight: 600;">—</span>
+                            <div
+                                style="margin-top: 12px; padding: 12px; background: #f0f0f0; border-radius: 8px; font-size: 13px; color: #666;">
+                                <strong>Поточний текст на відео:</strong> <span id="currentDynamicText"
+                                    style="color: #333; font-weight: 600;">—</span>
                             </div>
 
                             <!-- Dynamic Overlay Settings -->
-                            <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 14px;" onclick="toggleDynamicOverlaySettings()">
+                            <div class="section-title"
+                                style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; font-size: 14px;"
+                                onclick="toggleDynamicOverlaySettings()">
                                 <span>⚙️ Налаштування відображення</span>
                                 <span id="dynamicOverlaySettingsIcon" style="font-size: 16px;">▼</span>
                             </div>
-                            
-                            <div id="dynamicOverlaySettings" style="display: none; margin: 12px 0; padding: 15px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px;">
+
+                            <div id="dynamicOverlaySettings"
+                                style="display: none; margin: 12px 0; padding: 15px; background: #fff; border: 1px solid #dee2e6; border-radius: 8px;">
                                 <div class="form-group">
                                     <label for="DYNAMIC_OVERLAY_POSITION">Позиція</label>
                                     <select id="DYNAMIC_OVERLAY_POSITION" name="DYNAMIC_OVERLAY_POSITION">
@@ -750,7 +914,8 @@
 
                                 <div class="form-group">
                                     <label for="DYNAMIC_OVERLAY_FONTSIZE">Розмір шрифту</label>
-                                    <input type="number" id="DYNAMIC_OVERLAY_FONTSIZE" name="DYNAMIC_OVERLAY_FONTSIZE" value="20" min="8" max="72">
+                                    <input type="number" id="DYNAMIC_OVERLAY_FONTSIZE" name="DYNAMIC_OVERLAY_FONTSIZE"
+                                        value="20" min="8" max="72">
                                 </div>
 
                                 <div class="form-group">
@@ -769,13 +934,15 @@
 
                                 <div class="form-group">
                                     <label for="DYNAMIC_OVERLAY_TEXT_OPACITY">Прозорість тексту (0.0 - 1.0)</label>
-                                    <input type="number" id="DYNAMIC_OVERLAY_TEXT_OPACITY" name="DYNAMIC_OVERLAY_TEXT_OPACITY" value="1.0" min="0" max="1" step="0.1">
+                                    <input type="number" id="DYNAMIC_OVERLAY_TEXT_OPACITY"
+                                        name="DYNAMIC_OVERLAY_TEXT_OPACITY" value="1.0" min="0" max="1" step="0.1">
                                 </div>
 
                                 <div class="form-group">
                                     <label for="DYNAMIC_OVERLAY_BORDER_WIDTH">Товщина обводки (0 = фон)</label>
                                     <span class="help-text">Обводка робить текст читабельним на будь-якому тлі</span>
-                                    <input type="number" id="DYNAMIC_OVERLAY_BORDER_WIDTH" name="DYNAMIC_OVERLAY_BORDER_WIDTH" value="0" min="0" max="10">
+                                    <input type="number" id="DYNAMIC_OVERLAY_BORDER_WIDTH"
+                                        name="DYNAMIC_OVERLAY_BORDER_WIDTH" value="0" min="0" max="10">
                                 </div>
 
                                 <div id="dynamicBgGroup" style="display: block;">
@@ -792,7 +959,8 @@
 
                                     <div class="form-group">
                                         <label for="DYNAMIC_OVERLAY_BG_OPACITY">Прозорість фону (0.0 - 1.0)</label>
-                                        <input type="number" id="DYNAMIC_OVERLAY_BG_OPACITY" name="DYNAMIC_OVERLAY_BG_OPACITY" value="0.5" min="0" max="1" step="0.1">
+                                        <input type="number" id="DYNAMIC_OVERLAY_BG_OPACITY"
+                                            name="DYNAMIC_OVERLAY_BG_OPACITY" value="0.5" min="0" max="1" step="0.1">
                                     </div>
                                 </div>
 
@@ -809,68 +977,74 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
                     </div>
-                </div>
 
-                <div class="section-title">Режим трансляції</div>
+                    <div class="section-title">Режим трансляції</div>
 
-                <div class="form-group">
-                    <label for="STREAM_MODE">Режим при скануванні</label>
-                    <span class="help-text">Визначає поведінку трансляції коли DZYGA сканує частоти</span>
-                    <select id="STREAM_MODE" name="STREAM_MODE">
-                        <option value="always">Завжди транслювати (ігнорувати сканування)</option>
-                        <option value="on-lock">Транслювати тільки при зупинці (пауза під час сканування)</option>
-                        <option value="overlay">Показувати індикатор "СКАНУВАННЯ..." на екрані</option>
-                    </select>
-                </div>
-
-                <div class="section-title">Якість відео</div>
-
-                <div class="form-group">
-                    <label for="VIDEO_CRF">CRF (якість відео)</label>
-                    <span class="help-text">28-32 = низький CPU, 23-27 = краща якість</span>
-                    <input type="number" id="VIDEO_CRF" name="VIDEO_CRF" value="28" min="18" max="35">
-                </div>
-
-                <div class="form-group">
-                    <label for="VIDEO_FPS">Кадрів на секунду (FPS)</label>
-                    <span class="help-text">15 = економія трафіку, 25 = плавне відео</span>
-                    <span class="help-text" style="color: #666; font-style: italic;">⚠️ Працює тільки при перекодуванні (коли увімкнено оверлей або частоту)</span>
-                    <input type="number" id="VIDEO_FPS" name="VIDEO_FPS" value="15" min="10" max="30">
-                </div>
-
-                <details style="margin-top: 16px;">
-                    <summary style="cursor: pointer; font-weight: 600; color: #333;">Розширені налаштування</summary>
-
-                    <div class="form-group" style="margin-top: 16px;">
-                        <label for="USE_UDP_PROXY">UDP Proxy режим</label>
-                        <span class="help-text">Ізолює ffmpeg від RTSP джерела, запобігає блокуванню інших клієнтів (GStreamer/VLC)</span>
-                        <span class="help-text" style="color: #28a745; font-weight: 600;">✓ Рекомендовано: увімкнено</span>
-                        <select id="USE_UDP_PROXY" name="USE_UDP_PROXY">
-                            <option value="true">Увімкнено</option>
-                            <option value="false">Вимкнено</option>
+                    <div class="form-group">
+                        <label for="STREAM_MODE">Режим при скануванні</label>
+                        <span class="help-text">Визначає поведінку трансляції коли DZYGA сканує частоти</span>
+                        <select id="STREAM_MODE" name="STREAM_MODE">
+                            <option value="always">Завжди транслювати (ігнорувати сканування)</option>
+                            <option value="on-lock">Транслювати тільки при зупинці (пауза під час сканування)</option>
+                            <option value="overlay">Показувати індикатор "СКАНУВАННЯ..." на екрані</option>
                         </select>
                     </div>
 
-                                    </details>
+                    <div class="section-title">Якість відео</div>
 
-                <div class="button-group">
-                    <button type="submit" class="btn btn-primary" id="saveBtn">
-                        💾 Зберегти конфігурацію
-                    </button>
-                </div>
-            </form>
+                    <div class="form-group">
+                        <label for="VIDEO_CRF">CRF (якість відео)</label>
+                        <span class="help-text">28-32 = низький CPU, 23-27 = краща якість</span>
+                        <input type="number" id="VIDEO_CRF" name="VIDEO_CRF" value="28" min="18" max="35">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="VIDEO_FPS">Кадрів на секунду (FPS)</label>
+                        <span class="help-text">15 = економія трафіку, 25 = плавне відео</span>
+                        <span class="help-text" style="color: #666; font-style: italic;">⚠️ Працює тільки при
+                            перекодуванні (коли увімкнено оверлей або частоту)</span>
+                        <input type="number" id="VIDEO_FPS" name="VIDEO_FPS" value="15" min="10" max="30">
+                    </div>
+
+                    <details style="margin-top: 16px;">
+                        <summary style="cursor: pointer; font-weight: 600; color: #333;">Розширені налаштування
+                        </summary>
+
+                        <div class="form-group" style="margin-top: 16px;">
+                            <label for="USE_UDP_PROXY">UDP Proxy режим</label>
+                            <span class="help-text">Ізолює ffmpeg від RTSP джерела, запобігає блокуванню інших клієнтів
+                                (GStreamer/VLC)</span>
+                            <span class="help-text" style="color: #28a745; font-weight: 600;">✓ Рекомендовано:
+                                увімкнено</span>
+                            <select id="USE_UDP_PROXY" name="USE_UDP_PROXY">
+                                <option value="true">Увімкнено</option>
+                                <option value="false">Вимкнено</option>
+                            </select>
+                        </div>
+
+                    </details>
+
+                    <div class="button-group">
+                        <button type="submit" class="btn btn-primary" id="saveBtn">
+                            💾 Зберегти конфігурацію
+                        </button>
+                    </div>
+                </form>
             </div>
 
             <!-- Raw Config Tab Content -->
             <div id="rawTabContent" class="tab-content" style="display: none;">
-                <div class="section-title">📝 Редагування конфігураційного файлу <span style="font-size: 12px; color: #999;">(для досвідчених користувачів)</span></div>
-                
-                <div style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #ffc107;">
+                <div class="section-title">📝 Редагування конфігураційного файлу <span
+                        style="font-size: 12px; color: #999;">(для досвідчених користувачів)</span></div>
+
+                <div
+                    style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #ffc107;">
                     <strong style="color: #856404;">⚠️ Увага:</strong>
                     <p style="margin: 8px 0 0 0; font-size: 13px; color: #856404;">
-                        Пряме редагування конфігураційного файлу дає повний контроль над всіма налаштуваннями, 
-                        але може призвести до проблем з сумісністю, якщо зроблено помилки. 
+                        Пряме редагування конфігураційного файлу дає повний контроль над всіма налаштуваннями,
+                        але може призвести до проблем з сумісністю, якщо зроблено помилки.
                         Перед збереженням створюється резервна копія поточного конфігураційного файлу.
                     </p>
                 </div>
@@ -880,9 +1054,7 @@
                     <span class="help-text">
                         Редагуйте параметри конфігурації напряму. Кожен параметр має формат: КЛЮЧ=ЗНАЧЕННЯ
                     </span>
-                    <textarea id="rawConfigContent" 
-                              spellcheck="false"
-                              placeholder="# FORPOST Stream Configuration
+                    <textarea id="rawConfigContent" spellcheck="false" placeholder="# FORPOST Stream Configuration
 # Example settings:
 RTMP_URL=rtmps://server:port/app/key
 OVERLAY_TEXT=My Drone
@@ -896,7 +1068,8 @@ VIDEO_CRF=30"></textarea>
                     <button type="button" class="btn btn-primary" id="saveRawBtn">
                         💾 Зберегти конфігураційний файл
                     </button>
-                    <button type="button" class="btn btn-secondary" id="loadDefaultsBtn" style="background: #17a2b8; color: white;">
+                    <button type="button" class="btn btn-secondary" id="loadDefaultsBtn"
+                        style="background: #17a2b8; color: white;">
                         📋 Завантажити шаблон + defaults
                     </button>
                 </div>
@@ -906,7 +1079,8 @@ VIDEO_CRF=30"></textarea>
                     <div id="backupList" style="margin-top: 8px;"></div>
                 </div>
 
-                <div id="rawEditorStatus" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
+                <div id="rawEditorStatus"
+                    style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
             </div>
         </div>
     </div>
@@ -933,7 +1107,7 @@ VIDEO_CRF=30"></textarea>
                         badge.className = 'status-badge status-inactive';
                         badge.textContent = '● Неактивний';
                     }
-                    
+
                     // Update autostart checkbox
                     const checkbox = document.getElementById('autostartCheckbox');
                     if (checkbox) {
@@ -966,7 +1140,7 @@ VIDEO_CRF=30"></textarea>
             const rawTab = document.getElementById('rawTab');
             const formContent = document.getElementById('formTabContent');
             const rawContent = document.getElementById('rawTabContent');
-            
+
             if (tabName === 'form') {
                 formTab.classList.add('active');
                 rawTab.classList.remove('active');
@@ -977,7 +1151,7 @@ VIDEO_CRF=30"></textarea>
                 rawTab.classList.add('active');
                 formContent.style.display = 'none';
                 rawContent.style.display = 'block';
-                
+
                 // Load raw config when switching to raw tab
                 loadRawConfig();
                 loadBackups();
@@ -1050,7 +1224,7 @@ VIDEO_CRF=30"></textarea>
         function updateCpuModeBadge(config) {
             const badge = document.getElementById('cpuModeBadge');
             const overlayEnabled = config.OVERLAY_ENABLED === 'true';
-            
+
             if (overlayEnabled) {
                 badge.className = 'cpu-mode-badge cpu-high';
                 badge.textContent = '⚡ Перекодування';
@@ -1086,7 +1260,7 @@ VIDEO_CRF=30"></textarea>
             if (overlayOptionsSection) {
                 overlayOptionsSection.style.display = overlayEnabled ? 'block' : 'none';
             }
-            
+
             const borderWidth = parseInt(config.DYNAMIC_OVERLAY_BORDER_WIDTH);
             const bgGroup = document.getElementById('dynamicBgGroup');
             const borderGroup = document.getElementById('dynamicBorderGroup');
@@ -1104,7 +1278,7 @@ VIDEO_CRF=30"></textarea>
         let lastScanningState = 'stable';
         let isTextSaved = true;  // Track if current text in input is saved to server
         let lastSavedText = '';  // Track what was last saved
-        
+
         function loadDynamicOverlayText() {
             fetch('/api/dynamic-overlay')
                 .then(response => response.json())
@@ -1114,12 +1288,12 @@ VIDEO_CRF=30"></textarea>
                     const clearButton = document.getElementById('clearDynamicText');
                     const scanningIndicator = document.getElementById('scanningIndicator');
                     const scanningText = document.getElementById('scanningText');
-                    
+
                     // Always update display text with server value
                     if (currentText) {
                         currentText.textContent = data.text || '—';
                     }
-                    
+
                     // Update scanning status indicator
                     const isScanning = data.scanning === 'scanning';
                     if (scanningIndicator && scanningText) {
@@ -1133,7 +1307,7 @@ VIDEO_CRF=30"></textarea>
                             scanningText.textContent = '✓ Частота стабільна';
                         }
                     }
-                    
+
                     // Clear input only when:
                     // 1. Transitioning from stable to scanning
                     // 2. AND text was previously saved (not being edited)
@@ -1146,9 +1320,9 @@ VIDEO_CRF=30"></textarea>
                             clearButton.style.display = 'none';
                         }
                     }
-                    
+
                     lastScanningState = data.scanning || 'stable';
-                    
+
                     // Update clear button visibility
                     if (clearButton && textInput) {
                         clearButton.style.display = textInput.value ? 'block' : 'none';
@@ -1171,7 +1345,7 @@ VIDEO_CRF=30"></textarea>
                 }
                 return;
             }
-            
+
             fetch('/api/dynamic-overlay', {
                 method: 'POST',
                 headers: {
@@ -1179,22 +1353,22 @@ VIDEO_CRF=30"></textarea>
                 },
                 body: JSON.stringify({ text: text })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    console.log('Dynamic overlay text updated');
-                    isTextSaved = true;
-                    lastSavedText = text;
-                    // Reload to show current text
-                    loadDynamicOverlayText();
-                }
-            })
-            .catch(err => console.error('Failed to save dynamic overlay text:', err));
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Dynamic overlay text updated');
+                        isTextSaved = true;
+                        lastSavedText = text;
+                        // Reload to show current text
+                        loadDynamicOverlayText();
+                    }
+                })
+                .catch(err => console.error('Failed to save dynamic overlay text:', err));
         }
 
-        document.getElementById('configForm').addEventListener('submit', function(e) {
+        document.getElementById('configForm').addEventListener('submit', function (e) {
             e.preventDefault();
-            
+
             const formData = new FormData(e.target);
             const config = {};
             for (const [key, value] of formData.entries()) {
@@ -1206,54 +1380,54 @@ VIDEO_CRF=30"></textarea>
             saveBtn.textContent = '⏳ Збереження...';
 
             fetch('/api/status')
-            .then(r => r.json())
-            .then(statusBefore => {
-                const wasActive = statusBefore.active || false;
+                .then(r => r.json())
+                .then(statusBefore => {
+                    const wasActive = statusBefore.active || false;
 
-                return fetch('/api/config', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(config)
+                    return fetch('/api/config', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(config)
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                showAlert('✅ ' + data.message, 'success');
+                                loadConfig();
+
+                                if (wasActive) {
+                                    setOperationBadge('⏳ Перезапуск…');
+                                    const minVisibleMs = 1500;
+                                    const startedAt = Date.now();
+                                    return waitForRestart(25000)
+                                        .catch(() => null)
+                                        .then(() => updateStatus())
+                                        .finally(() => {
+                                            const elapsed = Date.now() - startedAt;
+                                            const remaining = Math.max(0, minVisibleMs - elapsed);
+                                            setTimeout(() => {
+                                                clearOperationBadge();
+                                            }, remaining);
+                                        });
+                                }
+                            } else {
+                                showAlert('❌ ' + data.error, 'error');
+                            }
+                        });
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showAlert('✅ ' + data.message, 'success');
-                        loadConfig();
-
-                        if (wasActive) {
-                            setOperationBadge('⏳ Перезапуск…');
-                            const minVisibleMs = 1500;
-                            const startedAt = Date.now();
-                            return waitForRestart(25000)
-                                .catch(() => null)
-                                .then(() => updateStatus())
-                                .finally(() => {
-                                    const elapsed = Date.now() - startedAt;
-                                    const remaining = Math.max(0, minVisibleMs - elapsed);
-                                    setTimeout(() => {
-                                        clearOperationBadge();
-                                    }, remaining);
-                                });
-                        }
-                    } else {
-                        showAlert('❌ ' + data.error, 'error');
-                    }
+                .catch(err => {
+                    showAlert('❌ Помилка: ' + err.message, 'error');
+                })
+                .finally(() => {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = '💾 Зберегти конфігурацію';
                 });
-            })
-            .catch(err => {
-                showAlert('❌ Помилка: ' + err.message, 'error');
-            })
-            .finally(() => {
-                saveBtn.disabled = false;
-                saveBtn.textContent = '💾 Зберегти конфігурацію';
-            });
         });
 
         // Start stream button
-        document.getElementById('startBtn').addEventListener('click', function() {
+        document.getElementById('startBtn').addEventListener('click', function () {
             const btn = this;
             btn.disabled = true;
             const originalText = btn.textContent;
@@ -1263,36 +1437,36 @@ VIDEO_CRF=30"></textarea>
             fetch('/api/stream/start', {
                 method: 'POST'
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('✅ ' + data.message, 'success');
-                    return waitForDesiredActiveState(true, 20000)
-                        .then(() => {
-                            clearOperationBadge();
-                            updateStatus();
-                        })
-                        .catch(() => {
-                            clearOperationBadge();
-                            updateStatus();
-                        });
-                } else {
-                    showAlert('❌ ' + data.error, 'error');
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('✅ ' + data.message, 'success');
+                        return waitForDesiredActiveState(true, 20000)
+                            .then(() => {
+                                clearOperationBadge();
+                                updateStatus();
+                            })
+                            .catch(() => {
+                                clearOperationBadge();
+                                updateStatus();
+                            });
+                    } else {
+                        showAlert('❌ ' + data.error, 'error');
+                        clearOperationBadge();
+                    }
+                })
+                .catch(err => {
+                    showAlert('❌ Помилка: ' + err.message, 'error');
                     clearOperationBadge();
-                }
-            })
-            .catch(err => {
-                showAlert('❌ Помилка: ' + err.message, 'error');
-                clearOperationBadge();
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.textContent = originalText;
-            });
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                });
         });
 
         // Stop stream button
-        document.getElementById('stopBtn').addEventListener('click', function() {
+        document.getElementById('stopBtn').addEventListener('click', function () {
             if (!confirm('Ви впевнені, що хочете зупинити стрім?')) {
                 return;
             }
@@ -1306,36 +1480,36 @@ VIDEO_CRF=30"></textarea>
             fetch('/api/stream/stop', {
                 method: 'POST'
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('✅ ' + data.message, 'success');
-                    return waitForDesiredActiveState(false, 20000)
-                        .then(() => {
-                            clearOperationBadge();
-                            updateStatus();
-                        })
-                        .catch(() => {
-                            clearOperationBadge();
-                            updateStatus();
-                        });
-                } else {
-                    showAlert('❌ ' + data.error, 'error');
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('✅ ' + data.message, 'success');
+                        return waitForDesiredActiveState(false, 20000)
+                            .then(() => {
+                                clearOperationBadge();
+                                updateStatus();
+                            })
+                            .catch(() => {
+                                clearOperationBadge();
+                                updateStatus();
+                            });
+                    } else {
+                        showAlert('❌ ' + data.error, 'error');
+                        clearOperationBadge();
+                    }
+                })
+                .catch(err => {
+                    showAlert('❌ Помилка: ' + err.message, 'error');
                     clearOperationBadge();
-                }
-            })
-            .catch(err => {
-                showAlert('❌ Помилка: ' + err.message, 'error');
-                clearOperationBadge();
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.textContent = originalText;
-            });
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                });
         });
 
         // Restart stream button
-        document.getElementById('restartStreamBtn').addEventListener('click', function() {
+        document.getElementById('restartStreamBtn').addEventListener('click', function () {
             if (!confirm('Ви впевнені, що хочете перезапустити стрім?')) {
                 return;
             }
@@ -1350,36 +1524,36 @@ VIDEO_CRF=30"></textarea>
             fetch('/api/stream/restart', {
                 method: 'POST'
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('✅ ' + data.message, 'success');
-                    return waitForDesiredActiveState(true, 25000)
-                        .then(() => {
-                            clearOperationBadge();
-                            updateStatus();
-                        })
-                        .catch(() => {
-                            clearOperationBadge();
-                            updateStatus();
-                        });
-                } else {
-                    showAlert('❌ ' + data.error, 'error');
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('✅ ' + data.message, 'success');
+                        return waitForDesiredActiveState(true, 25000)
+                            .then(() => {
+                                clearOperationBadge();
+                                updateStatus();
+                            })
+                            .catch(() => {
+                                clearOperationBadge();
+                                updateStatus();
+                            });
+                    } else {
+                        showAlert('❌ ' + data.error, 'error');
+                        clearOperationBadge();
+                    }
+                })
+                .catch(err => {
+                    showAlert('❌ Помилка: ' + err.message, 'error');
                     clearOperationBadge();
-                }
-            })
-            .catch(err => {
-                showAlert('❌ Помилка: ' + err.message, 'error');
-                clearOperationBadge();
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.textContent = originalText;
-            });
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                });
         });
 
         // Reset RP2040 button
-        document.getElementById('resetRp2040Btn').addEventListener('click', function() {
+        document.getElementById('resetRp2040Btn').addEventListener('click', function () {
             if (!confirm('Виконати м\'який reset RP2040? Це допоможе при зависанні контролера частот.')) {
                 return;
             }
@@ -1389,7 +1563,7 @@ VIDEO_CRF=30"></textarea>
             btn.disabled = true;
             const originalText = btn.textContent;
             btn.textContent = '⏳ Виконується reset...';
-            
+
             statusDiv.style.display = 'block';
             statusDiv.style.background = '#fff3cd';
             statusDiv.style.color = '#856404';
@@ -1398,42 +1572,42 @@ VIDEO_CRF=30"></textarea>
             fetch('/api/reset-rp2040', {
                 method: 'POST'
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    statusDiv.style.background = '#d4edda';
-                    statusDiv.style.color = '#155724';
-                    statusDiv.textContent = '✅ ' + data.message;
-                    showAlert('✅ ' + data.message, 'success');
-                } else {
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        statusDiv.style.background = '#d4edda';
+                        statusDiv.style.color = '#155724';
+                        statusDiv.textContent = '✅ ' + data.message;
+                        showAlert('✅ ' + data.message, 'success');
+                    } else {
+                        statusDiv.style.background = '#f8d7da';
+                        statusDiv.style.color = '#721c24';
+                        statusDiv.textContent = '❌ ' + data.error;
+                        showAlert('❌ ' + data.error, 'error');
+                    }
+
+                    setTimeout(() => {
+                        statusDiv.style.display = 'none';
+                    }, 10000);
+                })
+                .catch(err => {
                     statusDiv.style.background = '#f8d7da';
                     statusDiv.style.color = '#721c24';
-                    statusDiv.textContent = '❌ ' + data.error;
-                    showAlert('❌ ' + data.error, 'error');
-                }
-                
-                setTimeout(() => {
-                    statusDiv.style.display = 'none';
-                }, 10000);
-            })
-            .catch(err => {
-                statusDiv.style.background = '#f8d7da';
-                statusDiv.style.color = '#721c24';
-                statusDiv.textContent = '❌ Помилка: ' + err.message;
-                showAlert('❌ Помилка: ' + err.message, 'error');
-                
-                setTimeout(() => {
-                    statusDiv.style.display = 'none';
-                }, 10000);
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.textContent = originalText;
-            });
+                    statusDiv.textContent = '❌ Помилка: ' + err.message;
+                    showAlert('❌ Помилка: ' + err.message, 'error');
+
+                    setTimeout(() => {
+                        statusDiv.style.display = 'none';
+                    }, 10000);
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                });
         });
 
         // Restart Dzyga button
-        document.getElementById('restartDzygaBtn').addEventListener('click', function() {
+        document.getElementById('restartDzygaBtn').addEventListener('click', function () {
             if (!confirm('Перезавантажити Dzyga сервіс? Це перезапустить модуль пошуку частот.')) {
                 return;
             }
@@ -1443,7 +1617,7 @@ VIDEO_CRF=30"></textarea>
             btn.disabled = true;
             const originalText = btn.textContent;
             btn.textContent = '⏳ Перезапуск...';
-            
+
             statusDiv.style.display = 'block';
             statusDiv.style.background = '#fff3cd';
             statusDiv.style.color = '#856404';
@@ -1452,44 +1626,44 @@ VIDEO_CRF=30"></textarea>
             fetch('/api/restart-dzyga', {
                 method: 'POST'
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    statusDiv.style.background = '#d4edda';
-                    statusDiv.style.color = '#155724';
-                    statusDiv.textContent = '✅ ' + data.message;
-                    showAlert('✅ ' + data.message, 'success');
-                } else {
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        statusDiv.style.background = '#d4edda';
+                        statusDiv.style.color = '#155724';
+                        statusDiv.textContent = '✅ ' + data.message;
+                        showAlert('✅ ' + data.message, 'success');
+                    } else {
+                        statusDiv.style.background = '#f8d7da';
+                        statusDiv.style.color = '#721c24';
+                        statusDiv.textContent = '❌ ' + data.error;
+                        showAlert('❌ ' + data.error, 'error');
+                    }
+
+                    setTimeout(() => {
+                        statusDiv.style.display = 'none';
+                    }, 10000);
+                })
+                .catch(err => {
                     statusDiv.style.background = '#f8d7da';
                     statusDiv.style.color = '#721c24';
-                    statusDiv.textContent = '❌ ' + data.error;
-                    showAlert('❌ ' + data.error, 'error');
-                }
-                
-                setTimeout(() => {
-                    statusDiv.style.display = 'none';
-                }, 10000);
-            })
-            .catch(err => {
-                statusDiv.style.background = '#f8d7da';
-                statusDiv.style.color = '#721c24';
-                statusDiv.textContent = '❌ Помилка: ' + err.message;
-                showAlert('❌ Помилка: ' + err.message, 'error');
-                
-                setTimeout(() => {
-                    statusDiv.style.display = 'none';
-                }, 10000);
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.textContent = originalText;
-            });
+                    statusDiv.textContent = '❌ Помилка: ' + err.message;
+                    showAlert('❌ Помилка: ' + err.message, 'error');
+
+                    setTimeout(() => {
+                        statusDiv.style.display = 'none';
+                    }, 10000);
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                });
         });
 
         // Autostart checkbox
-        document.getElementById('autostartCheckbox').addEventListener('change', function() {
+        document.getElementById('autostartCheckbox').addEventListener('change', function () {
             const enable = this.checked;
-            
+
             fetch('/api/stream/autostart', {
                 method: 'POST',
                 headers: {
@@ -1497,33 +1671,33 @@ VIDEO_CRF=30"></textarea>
                 },
                 body: JSON.stringify({ enable: enable })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('✅ ' + data.message, 'success');
-                } else {
-                    showAlert('❌ ' + data.error, 'error');
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('✅ ' + data.message, 'success');
+                    } else {
+                        showAlert('❌ ' + data.error, 'error');
+                        // Revert checkbox on error
+                        this.checked = !enable;
+                    }
+                })
+                .catch(err => {
+                    showAlert('❌ Помилка: ' + err.message, 'error');
                     // Revert checkbox on error
                     this.checked = !enable;
-                }
-            })
-            .catch(err => {
-                showAlert('❌ Помилка: ' + err.message, 'error');
-                // Revert checkbox on error
-                this.checked = !enable;
-            });
+                });
         });
 
         // Auto-restart checkbox
-        document.getElementById('autorestartCheckbox').addEventListener('change', function() {
+        document.getElementById('autorestartCheckbox').addEventListener('change', function () {
             const enable = this.checked;
             const intervalGroup = document.getElementById('autorestartIntervalGroup');
-            
+
             // Show/hide interval input
             intervalGroup.style.display = enable ? 'block' : 'none';
-            
+
             const interval = parseInt(document.getElementById('autorestartInterval').value) || 2;
-            
+
             fetch('/api/autorestart', {
                 method: 'POST',
                 headers: {
@@ -1531,32 +1705,32 @@ VIDEO_CRF=30"></textarea>
                 },
                 body: JSON.stringify({ enabled: enable, interval: interval })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('✅ ' + data.message, 'success');
-                } else {
-                    showAlert('❌ ' + data.error, 'error');
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('✅ ' + data.message, 'success');
+                    } else {
+                        showAlert('❌ ' + data.error, 'error');
+                        // Revert checkbox on error
+                        this.checked = !enable;
+                        intervalGroup.style.display = !enable ? 'block' : 'none';
+                    }
+                })
+                .catch(err => {
+                    showAlert('❌ Помилка: ' + err.message, 'error');
                     // Revert checkbox on error
                     this.checked = !enable;
                     intervalGroup.style.display = !enable ? 'block' : 'none';
-                }
-            })
-            .catch(err => {
-                showAlert('❌ Помилка: ' + err.message, 'error');
-                // Revert checkbox on error
-                this.checked = !enable;
-                intervalGroup.style.display = !enable ? 'block' : 'none';
-            });
+                });
         });
 
         // Auto-restart interval change
-        document.getElementById('autorestartInterval').addEventListener('change', function() {
+        document.getElementById('autorestartInterval').addEventListener('change', function () {
             const enabled = document.getElementById('autorestartCheckbox').checked;
             if (!enabled) return;
-            
+
             const interval = parseInt(this.value) || 2;
-            
+
             fetch('/api/autorestart', {
                 method: 'POST',
                 headers: {
@@ -1564,17 +1738,17 @@ VIDEO_CRF=30"></textarea>
                 },
                 body: JSON.stringify({ enabled: true, interval: interval })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showAlert('✅ Період перезапуску оновлено: ' + interval + 'год', 'success');
-                } else {
-                    showAlert('❌ ' + data.error, 'error');
-                }
-            })
-            .catch(err => {
-                showAlert('❌ Помилка: ' + err.message, 'error');
-            });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert('✅ Період перезапуску оновлено: ' + interval + 'год', 'success');
+                    } else {
+                        showAlert('❌ ' + data.error, 'error');
+                    }
+                })
+                .catch(err => {
+                    showAlert('❌ Помилка: ' + err.message, 'error');
+                });
         });
 
         function loadAutorestartSettings() {
@@ -1584,7 +1758,7 @@ VIDEO_CRF=30"></textarea>
                     const checkbox = document.getElementById('autorestartCheckbox');
                     const intervalInput = document.getElementById('autorestartInterval');
                     const intervalGroup = document.getElementById('autorestartIntervalGroup');
-                    
+
                     checkbox.checked = data.enabled || false;
                     intervalInput.value = data.interval || 2;
                     intervalGroup.style.display = data.enabled ? 'block' : 'none';
@@ -1594,7 +1768,7 @@ VIDEO_CRF=30"></textarea>
 
         function checkUpdates() {
             const channel = document.getElementById('updateChannel').value;
-            
+
             fetch(`/api/updates/check?channel=${channel}`)
                 .then(response => response.json())
                 .then(data => {
@@ -1602,10 +1776,10 @@ VIDEO_CRF=30"></textarea>
                         console.error('Update check failed:', data.error);
                         return;
                     }
-                    
+
                     document.getElementById('currentVersion').textContent = data.current;
                     document.getElementById('currentVersionBadge').textContent = data.current;
-                    
+
                     // Show update available banner and badge
                     const newVersionBadge = document.getElementById('newVersionBadge');
                     if (data.has_update) {
@@ -1616,24 +1790,24 @@ VIDEO_CRF=30"></textarea>
                         document.getElementById('updateAvailable').style.display = 'none';
                         newVersionBadge.style.display = 'none';
                     }
-                    
+
                     // Build releases list
                     const updatesList = document.getElementById('updatesList');
                     updatesList.innerHTML = '';
-                    
+
                     if (data.releases && data.releases.length > 0) {
                         data.releases.forEach(release => {
                             const isCurrent = release.version === `v${data.current}`;
                             const releaseDiv = document.createElement('div');
                             releaseDiv.style.cssText = 'border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 12px;';
-                            
+
                             let badge = '';
                             if (isCurrent) {
                                 badge = '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">ПОТОЧНА</span>';
                             } else if (release.prerelease) {
                                 badge = '<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">BETA</span>';
                             }
-                            
+
                             releaseDiv.innerHTML = `
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <div>
@@ -1646,7 +1820,7 @@ VIDEO_CRF=30"></textarea>
                                 </div>
                                 ${release.body ? `<div style="font-size: 12px; color: #666; white-space: pre-wrap;">${release.body.substring(0, 200)}${release.body.length > 200 ? '...' : ''}</div>` : ''}
                             `;
-                            
+
                             updatesList.appendChild(releaseDiv);
                         });
                     } else {
@@ -1661,48 +1835,48 @@ VIDEO_CRF=30"></textarea>
             if (!confirm(`Ви впевнені, що хочете оновити до версії ${version}?`)) {
                 return;
             }
-            
+
             const overlay = document.getElementById('updateOverlay');
             const message = document.getElementById('updateMessage');
-            
+
             overlay.classList.add('show');
             message.textContent = 'Запуск оновлення...';
-            
+
             fetch('/api/updates/install', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ version: version })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    message.textContent = 'Оновлення... Зачекайте 35 секунд...';
-                    
-                    // Simple approach: wait 35 seconds and reload
-                    // This is more reliable than polling
-                    setTimeout(() => {
-                        message.textContent = '✅ Оновлення завершено! Перезавантаження...';
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        message.textContent = 'Оновлення... Зачекайте 35 секунд...';
+
+                        // Simple approach: wait 35 seconds and reload
+                        // This is more reliable than polling
                         setTimeout(() => {
-                            location.reload(true);
-                        }, 1000);
-                    }, 35000);
-                } else {
+                            message.textContent = '✅ Оновлення завершено! Перезавантаження...';
+                            setTimeout(() => {
+                                location.reload(true);
+                            }, 1000);
+                        }, 35000);
+                    } else {
+                        overlay.classList.remove('show');
+                        showAlert('❌ ' + (data.error || 'Помилка'), 'error');
+                    }
+                })
+                .catch(err => {
                     overlay.classList.remove('show');
-                    showAlert('❌ ' + (data.error || 'Помилка'), 'error');
-                }
-            })
-            .catch(err => {
-                overlay.classList.remove('show');
-                showAlert('❌ ' + err.message, 'error');
-            });
+                    showAlert('❌ ' + err.message, 'error');
+                });
         }
-        
-        
-        
+
+
+
         function toggleUpdateSection() {
             const content = document.getElementById('updateContent');
             const icon = document.getElementById('updateToggleIcon');
-            
+
             if (content.style.display === 'none') {
                 content.style.display = 'block';
                 icon.textContent = '▲';
@@ -1711,7 +1885,7 @@ VIDEO_CRF=30"></textarea>
                 icon.textContent = '▼';
             }
         }
-        
+
         function toggleStaticOverlay() {
             const content = document.getElementById('staticOverlaySection');
             const icon = document.getElementById('staticOverlayIcon');
@@ -1723,7 +1897,7 @@ VIDEO_CRF=30"></textarea>
                 icon.textContent = '▼';
             }
         }
-        
+
         function toggleStaticSettings() {
             const content = document.getElementById('staticSettings');
             const icon = document.getElementById('staticSettingsIcon');
@@ -1735,7 +1909,7 @@ VIDEO_CRF=30"></textarea>
                 icon.textContent = '▼';
             }
         }
-        
+
         function toggleFrequencyOverlay() {
             const content = document.getElementById('frequencyOverlaySection');
             const icon = document.getElementById('frequencyOverlayIcon');
@@ -1747,7 +1921,7 @@ VIDEO_CRF=30"></textarea>
                 icon.textContent = '▼';
             }
         }
-        
+
         function toggleDynamicOverlay() {
             const content = document.getElementById('dynamicOverlaySection');
             const icon = document.getElementById('dynamicOverlayIcon');
@@ -1759,7 +1933,7 @@ VIDEO_CRF=30"></textarea>
                 icon.textContent = '▼';
             }
         }
-        
+
         function toggleFrequencySettings() {
             const content = document.getElementById('frequencySettings');
             const icon = document.getElementById('frequencySettingsIcon');
@@ -1771,7 +1945,7 @@ VIDEO_CRF=30"></textarea>
                 icon.textContent = '▼';
             }
         }
-        
+
         function toggleDynamicOverlaySettings() {
             const content = document.getElementById('dynamicOverlaySettings');
             const icon = document.getElementById('dynamicOverlaySettingsIcon');
@@ -1783,7 +1957,7 @@ VIDEO_CRF=30"></textarea>
                 icon.textContent = '▼';
             }
         }
-        
+
         function togglePowerSettings() {
             const content = document.getElementById('powerSettingsSection');
             const icon = document.getElementById('powerSettingsIcon');
@@ -1796,18 +1970,18 @@ VIDEO_CRF=30"></textarea>
                 icon.textContent = '▼';
             }
         }
-        
+
         function loadPowerSettings() {
             fetch('/api/power-settings')
                 .then(response => response.json())
                 .then(data => {
                     const config = data.config || {};
                     const current = data.current || {};
-                    
+
                     // Update checkboxes
                     document.getElementById('powerSaveWifi').checked = config.POWER_SAVE_WIFI === 'true';
                     document.getElementById('powerSaveBluetooth').checked = config.POWER_SAVE_BLUETOOTH === 'true';
-                    
+
                     // Update Ethernet speed
                     const ethSpeed = config.POWER_SAVE_ETH_SPEED;
                     const ethAutoneg = config.POWER_SAVE_ETH_AUTONEG;
@@ -1818,11 +1992,11 @@ VIDEO_CRF=30"></textarea>
                         speedValue = '1000';
                     }
                     document.getElementById('powerSaveEthSpeed').value = speedValue;
-                    
+
                     // Update current state display
                     document.getElementById('currentWifiState').textContent = current.wifi_blocked ? '✅ Вимкнено' : '❌ Увімкнено';
                     document.getElementById('currentBluetoothState').textContent = current.bluetooth_blocked ? '✅ Вимкнено' : '❌ Увімкнено';
-                    
+
                     let ethStateText = current.eth_speed + 'Mbps';
                     if (current.eth_autoneg === 'on') {
                         ethStateText += ' (auto-negotiation)';
@@ -1836,15 +2010,15 @@ VIDEO_CRF=30"></textarea>
                     showAlert('Не вдалося завантажити налаштування енергозбереження', 'error');
                 });
         }
-        
+
         function applyPowerSettings() {
             const wifi = document.getElementById('powerSaveWifi').checked;
             const bluetooth = document.getElementById('powerSaveBluetooth').checked;
             const ethSpeed = document.getElementById('powerSaveEthSpeed').value;
-            
+
             let ethSpeedValue = 'auto';
             let ethAutonegValue = 'on';
-            
+
             if (ethSpeed === '100') {
                 ethSpeedValue = '100';
                 ethAutonegValue = 'off';
@@ -1852,52 +2026,52 @@ VIDEO_CRF=30"></textarea>
                 ethSpeedValue = '1000';
                 ethAutonegValue = 'off';
             }
-            
+
             const data = {
                 POWER_SAVE_WIFI: wifi ? 'true' : 'false',
                 POWER_SAVE_BLUETOOTH: bluetooth ? 'true' : 'false',
                 POWER_SAVE_ETH_SPEED: ethSpeedValue,
                 POWER_SAVE_ETH_AUTONEG: ethAutonegValue
             };
-            
+
             document.getElementById('applyPowerBtn').disabled = true;
-            
+
             fetch('/api/power-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    showAlert(result.message, 'success');
-                    setTimeout(() => loadPowerSettings(), 1000);
-                } else {
-                    showAlert(result.error || 'Помилка застосування налаштувань', 'error');
-                }
-            })
-            .catch(err => {
-                console.error('Failed to apply power settings:', err);
-                showAlert('Помилка з\'єднання з сервером', 'error');
-            })
-            .finally(() => {
-                document.getElementById('applyPowerBtn').disabled = false;
-            });
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        showAlert(result.message, 'success');
+                        setTimeout(() => loadPowerSettings(), 1000);
+                    } else {
+                        showAlert(result.error || 'Помилка застосування налаштувань', 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to apply power settings:', err);
+                    showAlert('Помилка з\'єднання з сервером', 'error');
+                })
+                .finally(() => {
+                    document.getElementById('applyPowerBtn').disabled = false;
+                });
         }
-        
+
         // Power settings button handler
         const applyPowerBtn = document.getElementById('applyPowerBtn');
         if (applyPowerBtn) {
             applyPowerBtn.addEventListener('click', applyPowerSettings);
         }
-        
+
         // Update channel change handler
         document.getElementById('updateChannel').addEventListener('change', checkUpdates);
 
         // Dynamic overlay text input handlers
         const dynamicOverlayInput = document.getElementById('dynamicOverlayText');
         const clearButton = document.getElementById('clearDynamicText');
-        
+
         if (dynamicOverlayInput) {
             // Show/hide clear button based on input content
             const updateClearButton = () => {
@@ -1905,15 +2079,15 @@ VIDEO_CRF=30"></textarea>
                     clearButton.style.display = dynamicOverlayInput.value ? 'block' : 'none';
                 }
             };
-            
+
             // Mark text as unsaved when user types
-            dynamicOverlayInput.addEventListener('input', function() {
+            dynamicOverlayInput.addEventListener('input', function () {
                 isTextSaved = (this.value === lastSavedText);
                 updateClearButton();
             });
-            
+
             // Save on Enter key
-            dynamicOverlayInput.addEventListener('keydown', function(e) {
+            dynamicOverlayInput.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     saveDynamicOverlayText(this.value);
@@ -1927,10 +2101,10 @@ VIDEO_CRF=30"></textarea>
                 }
             });
         }
-        
+
         // Clear button handler
         if (clearButton) {
-            clearButton.addEventListener('click', function() {
+            clearButton.addEventListener('click', function () {
                 dynamicOverlayInput.value = '';
                 clearButton.style.display = 'none';
                 isTextSaved = true;
@@ -1943,7 +2117,7 @@ VIDEO_CRF=30"></textarea>
         // Overlay enabled toggle
         const overlayEnabledSelect = document.getElementById('OVERLAY_ENABLED');
         if (overlayEnabledSelect) {
-            overlayEnabledSelect.addEventListener('change', function() {
+            overlayEnabledSelect.addEventListener('change', function () {
                 const config = { OVERLAY_ENABLED: this.value };
                 updateOverlayUI(config);
                 updateCpuModeBadge(config);
@@ -1953,7 +2127,7 @@ VIDEO_CRF=30"></textarea>
         // Static overlay border width toggle
         const staticBorderWidthInput = document.getElementById('OVERLAY_BORDER_WIDTH');
         if (staticBorderWidthInput) {
-            staticBorderWidthInput.addEventListener('change', function() {
+            staticBorderWidthInput.addEventListener('change', function () {
                 const borderWidth = parseInt(this.value || 0);
                 const bgGroup = document.getElementById('staticBgGroup');
                 const borderGroup = document.getElementById('staticBorderGroup');
@@ -1968,11 +2142,11 @@ VIDEO_CRF=30"></textarea>
                 }
             });
         }
-        
+
         // Frequency border width toggle
         const freqBorderWidthInput = document.getElementById('FREQUENCY_BORDER_WIDTH');
         if (freqBorderWidthInput) {
-            freqBorderWidthInput.addEventListener('change', function() {
+            freqBorderWidthInput.addEventListener('change', function () {
                 const borderWidth = parseInt(this.value || 0);
                 const bgGroup = document.getElementById('frequencyBgGroup');
                 const borderGroup = document.getElementById('frequencyBorderGroup');
@@ -1987,11 +2161,11 @@ VIDEO_CRF=30"></textarea>
                 }
             });
         }
-        
+
         // Dynamic overlay border width toggle
         const borderWidthInput = document.getElementById('DYNAMIC_OVERLAY_BORDER_WIDTH');
         if (borderWidthInput) {
-            borderWidthInput.addEventListener('change', function() {
+            borderWidthInput.addEventListener('change', function () {
                 const borderWidth = parseInt(this.value || 0);
                 const bgGroup = document.getElementById('dynamicBgGroup');
                 const borderGroup = document.getElementById('dynamicBorderGroup');
@@ -2011,16 +2185,16 @@ VIDEO_CRF=30"></textarea>
         updateStatus();
         loadAutorestartSettings();
         checkUpdates();
-        
+
         // Load dynamic overlay text on page load
         setTimeout(() => {
             loadDynamicOverlayText();
         }, 500);
-        
+
         // Poll dynamic overlay text every 3 seconds to sync with server
         // This clears the input field when frequency changes >10 MHz
         setInterval(loadDynamicOverlayText, 3000);
-        
+
         setInterval(updateStatus, 10000);
         setInterval(checkUpdates, 300000); // Check updates every 5 minutes
 
@@ -2028,7 +2202,7 @@ VIDEO_CRF=30"></textarea>
         function toggleRawEditor() {
             const section = document.getElementById('rawEditorSection');
             const icon = document.getElementById('rawEditorIcon');
-            
+
             if (section.style.display === 'none') {
                 section.style.display = 'block';
                 icon.textContent = '▲';
@@ -2044,18 +2218,18 @@ VIDEO_CRF=30"></textarea>
         function loadBackups() {
             const backupInfo = document.getElementById('backupInfo');
             const backupList = document.getElementById('backupList');
-            
+
             fetch('/api/config/backups')
                 .then(response => response.json())
                 .then(data => {
                     if (data.backups && data.backups.length > 0) {
                         backupInfo.style.display = 'block';
                         backupList.innerHTML = '';
-                        
+
                         data.backups.forEach(backup => {
                             const backupDiv = document.createElement('div');
                             backupDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; margin-bottom: 4px; background: white; border: 1px solid #ddd; border-radius: 4px;';
-                            
+
                             backupDiv.innerHTML = `
                                 <span style="font-size: 12px;">
                                     <strong>Бекап ${backup.number}:</strong> ${backup.modified}
@@ -2069,7 +2243,7 @@ VIDEO_CRF=30"></textarea>
                                     </button>
                                 </div>
                             `;
-                            
+
                             backupList.appendChild(backupDiv);
                         });
                     } else {
@@ -2105,31 +2279,31 @@ VIDEO_CRF=30"></textarea>
             if (!confirm(`⚠️ Відновлення з бекапу ${backupNum} перезапише поточну конфігурацію.\n\nПродовжити відновлення?`)) {
                 return;
             }
-            
+
             fetch(`/api/config/restore/${backupNum}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 }
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showRawEditorStatus(`✅ Конфігурацію відновлено з бекапу ${backupNum}`, 'success');
-                    // Reload the editor content and form data
-                    setTimeout(() => {
-                        loadRawConfig();
-                        loadConfig();
-                        loadBackups();
-                    }, 1000);
-                } else {
-                    showRawEditorStatus(`❌ Помилка відновлення: ${data.error}`, 'error');
-                }
-            })
-            .catch(err => {
-                console.error('Failed to restore backup:', err);
-                showRawEditorStatus('❌ Помилка відновлення конфігурації', 'error');
-            });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showRawEditorStatus(`✅ Конфігурацію відновлено з бекапу ${backupNum}`, 'success');
+                        // Reload the editor content and form data
+                        setTimeout(() => {
+                            loadRawConfig();
+                            loadConfig();
+                            loadBackups();
+                        }, 1000);
+                    } else {
+                        showRawEditorStatus(`❌ Помилка відновлення: ${data.error}`, 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to restore backup:', err);
+                    showRawEditorStatus('❌ Помилка відновлення конфігурації', 'error');
+                });
         }
 
         function loadDefaults() {
@@ -2154,13 +2328,13 @@ VIDEO_CRF=30"></textarea>
             const textarea = document.getElementById('rawConfigContent');
             const loadBtn = document.getElementById('loadRawBtn');
             const statusDiv = document.getElementById('rawEditorStatus');
-            
+
             if (!textarea || !loadBtn) return;
-            
+
             loadBtn.disabled = true;
             loadBtn.textContent = '⏳ Завантаження...';
             statusDiv.style.display = 'none';
-            
+
             fetch('/api/config/raw')
                 .then(response => response.json())
                 .then(data => {
@@ -2185,29 +2359,29 @@ VIDEO_CRF=30"></textarea>
             const textarea = document.getElementById('rawConfigContent');
             const saveBtn = document.getElementById('saveRawBtn');
             const content = textarea.value.trim();
-            
+
             if (!textarea || !saveBtn) return;
-            
+
             if (!content) {
                 showRawEditorStatus('❌ Конфігураційний файл не може бути порожнім', 'error');
                 return;
             }
-            
+
             // Basic validation
             const lines = content.split('\n');
             const invalidLines = lines.filter(line => {
                 const trimmed = line.trim();
                 return trimmed && !trimmed.startsWith('#') && !trimmed.includes('=') && trimmed !== '';
             });
-            
+
             if (invalidLines.length > 0) {
                 showRawEditorStatus(`❌ Знайдено некоректні рядки: ${invalidLines.slice(0, 3).join(', ')}${invalidLines.length > 3 ? '...' : ''}`, 'error');
                 return;
             }
-            
+
             saveBtn.disabled = true;
             saveBtn.textContent = '⏳ Збереження...';
-            
+
             fetch('/api/config/raw', {
                 method: 'POST',
                 headers: {
@@ -2215,34 +2389,34 @@ VIDEO_CRF=30"></textarea>
                 },
                 body: JSON.stringify({ content: content })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showRawEditorStatus('✅ Конфігурація збережена успішно. Створено резервну копію.', 'success');
-                    // Reload form data and backups
-                    setTimeout(() => {
-                        loadConfig();
-                        loadBackups();
-                    }, 1000);
-                } else {
-                    showRawEditorStatus(`❌ Помилка збереження: ${data.error}`, 'error');
-                }
-            })
-            .catch(err => {
-                console.error('Failed to save raw config:', err);
-                showRawEditorStatus('❌ Помилка збереження конфігурації', 'error');
-            })
-            .finally(() => {
-                saveBtn.disabled = false;
-                saveBtn.textContent = '💾 Зберегти конфігураційний файл';
-            });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showRawEditorStatus('✅ Конфігурація збережена успішно. Створено резервну копію.', 'success');
+                        // Reload form data and backups
+                        setTimeout(() => {
+                            loadConfig();
+                            loadBackups();
+                        }, 1000);
+                    } else {
+                        showRawEditorStatus(`❌ Помилка збереження: ${data.error}`, 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to save raw config:', err);
+                    showRawEditorStatus('❌ Помилка збереження конфігурації', 'error');
+                })
+                .finally(() => {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = '💾 Зберегти конфігураційний файл';
+                });
         }
 
         function showRawEditorStatus(message, type) {
             const statusDiv = document.getElementById('rawEditorStatus');
             statusDiv.textContent = message;
             statusDiv.style.display = 'block';
-            
+
             if (type === 'success') {
                 statusDiv.style.background = '#d4edda';
                 statusDiv.style.color = '#155724';
@@ -2252,7 +2426,7 @@ VIDEO_CRF=30"></textarea>
                 statusDiv.style.color = '#721c24';
                 statusDiv.style.border = '1px solid #f5c6cb';
             }
-            
+
             // Auto-hide after 10 seconds
             setTimeout(() => {
                 statusDiv.style.display = 'none';
@@ -2263,11 +2437,11 @@ VIDEO_CRF=30"></textarea>
         document.getElementById('loadRawBtn').addEventListener('click', loadRawConfig);
         document.getElementById('saveRawBtn').addEventListener('click', saveRawConfig);
         document.getElementById('loadDefaultsBtn').addEventListener('click', loadDefaults);
-        
+
         // Add keyboard shortcuts for raw editor
         const rawTextarea = document.getElementById('rawConfigContent');
         if (rawTextarea) {
-            rawTextarea.addEventListener('keydown', function(e) {
+            rawTextarea.addEventListener('keydown', function (e) {
                 // Ctrl+S to save
                 if (e.ctrlKey && e.key === 's') {
                     e.preventDefault();
@@ -2290,4 +2464,5 @@ VIDEO_CRF=30"></textarea>
         }
     </script>
 </body>
+
 </html>
