@@ -1,0 +1,10 @@
+[Unit]
+Description=Handle Forpost Stream config changes
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=__INSTALL_DIR__
+ExecStart=__INSTALL_DIR__/scripts/handle_config_change.sh
+StandardOutput=journal
+StandardError=journal

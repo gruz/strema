@@ -1,6 +1,6 @@
 #!/bin/bash
-# Update script for Forpost Stream
-# Downloads and installs a new version from GitHub releases
+# Simplified update script for Forpost Stream
+# Uses uninstall + install approach for simplicity and reliability
 
 set -e
 
@@ -8,14 +8,12 @@ GITHUB_REPO="gruz/strema"
 REQUESTED_VERSION="$1"
 
 # Determine installation directory
-# When run via systemd-run, we need to find the actual installation
 if [ -d "/home/rpidrone/strema" ]; then
     INSTALL_DIR="/home/rpidrone/strema"
 elif [ -n "$SUDO_USER" ]; then
     ORIGINAL_HOME=$(eval echo ~$SUDO_USER)
     INSTALL_DIR="$ORIGINAL_HOME/strema"
 else
-    # Fallback: try to find strema directory
     for user_home in /home/*; do
         if [ -d "$user_home/strema" ]; then
             INSTALL_DIR="$user_home/strema"
@@ -53,18 +51,44 @@ fi
 echo "Current version: $CURRENT_VERSION"
 echo "Target version: $REQUESTED_VERSION"
 
-# Download release archive
+# Create temporary directory for backup
+TMP_BACKUP=$(mktemp -d)
+trap "rm -rf $TMP_BACKUP" EXIT
+
+# Backup configuration
+echo ""
+echo "Backing up configuration..."
+if [ -f "$INSTALL_DIR/config/stream.conf" ]; then
+    cp "$INSTALL_DIR/config/stream.conf" "$TMP_BACKUP/stream.conf"
+    echo "✅ Config backed up to $TMP_BACKUP/stream.conf"
+else
+    echo "⚠️  No config to backup"
+fi
+
+# Backup logs directory
+if [ -d "$INSTALL_DIR/logs" ]; then
+    cp -r "$INSTALL_DIR/logs" "$TMP_BACKUP/logs"
+    echo "✅ Logs backed up"
+fi
+
+# Check if stream was running
+STREAM_WAS_ACTIVE=false
+if systemctl is-active forpost-stream 2>/dev/null | grep -q "active"; then
+    STREAM_WAS_ACTIVE=true
+    echo "✅ Stream service is active (will restart after update)"
+fi
+
+# Download new version
+echo ""
+echo "Downloading version $REQUESTED_VERSION..."
 ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$REQUESTED_VERSION/strema-$REQUESTED_VERSION.tar.gz"
 CHECKSUM_URL="https://github.com/$GITHUB_REPO/releases/download/$REQUESTED_VERSION/checksums.txt"
 
-echo ""
-echo "Downloading $ARCHIVE_URL..."
-TMP_DIR=$(mktemp -d)
-cd "$TMP_DIR"
+TMP_DOWNLOAD=$(mktemp -d)
+cd "$TMP_DOWNLOAD"
 
 if ! curl -fsSL -o "strema-$REQUESTED_VERSION.tar.gz" "$ARCHIVE_URL"; then
     echo "❌ Error: Failed to download release archive"
-    rm -rf "$TMP_DIR"
     exit 1
 fi
 
@@ -75,162 +99,94 @@ if curl -fsSL -o checksums.txt "$CHECKSUM_URL" 2>/dev/null; then
         echo "✅ Checksum verified"
     else
         echo "❌ Error: Checksum verification failed"
-        rm -rf "$TMP_DIR"
         exit 1
     fi
 else
     echo "⚠️  Warning: Could not download checksums, skipping verification"
 fi
 
-# Backup current config
-echo ""
-echo "Backing up configuration..."
-if [ -f "$INSTALL_DIR/config/stream.conf" ]; then
-    cp "$INSTALL_DIR/config/stream.conf" "$TMP_DIR/stream.conf.backup"
-    echo "✅ Config backed up"
-else
-    echo "⚠️  No config to backup"
-fi
-
-# Check if stream was running before stopping
-STREAM_WAS_ACTIVE=false
-if systemctl is-active forpost-stream 2>/dev/null | grep -q "active"; then
-    STREAM_WAS_ACTIVE=true
-    echo "Stream is currently active, will restart after update"
-fi
-
-# Stop services
-echo ""
-echo "Stopping services..."
-systemctl stop forpost-stream 2>/dev/null || true
-systemctl stop forpost-udp-proxy 2>/dev/null || true
-systemctl stop forpost-stream-web 2>/dev/null || true
-
-# Extract archive
-echo ""
-echo "Extracting new version..."
+# Extract to temporary location
+echo "Extracting archive..."
 tar -xzf "strema-$REQUESTED_VERSION.tar.gz"
+NEW_VERSION_DIR="$TMP_DOWNLOAD/strema"
 
-# Remove old installation (except config, logs, .git, and .github)
-echo "Removing old files..."
-if [ -d "$INSTALL_DIR" ]; then
-    # Keep config, logs, .git directory (for development), and .github (for workflows)
-    mv "$INSTALL_DIR/config" "$TMP_DIR/config.backup" 2>/dev/null || true
-    mv "$INSTALL_DIR/logs" "$TMP_DIR/logs.backup" 2>/dev/null || true
-    mv "$INSTALL_DIR/.git" "$TMP_DIR/git.backup" 2>/dev/null || true
-    mv "$INSTALL_DIR/.github" "$TMP_DIR/github.backup" 2>/dev/null || true
-    rm -rf "$INSTALL_DIR"
+# Uninstall old version
+echo ""
+echo "Uninstalling old version..."
+if [ -f "$INSTALL_DIR/uninstall.sh" ]; then
+    bash "$INSTALL_DIR/uninstall.sh"
+else
+    echo "⚠️  uninstall.sh not found, stopping services manually..."
+    systemctl stop forpost-stream 2>/dev/null || true
+    systemctl stop forpost-udp-proxy 2>/dev/null || true
+    systemctl stop forpost-stream-web 2>/dev/null || true
+    systemctl stop forpost-stream-config.path 2>/dev/null || true
+    systemctl stop forpost-stream-watchdog.timer 2>/dev/null || true
+    systemctl stop forpost-dzyga-monitor.timer 2>/dev/null || true
 fi
 
-# Install new version
+# Remove old installation directory
+echo "Removing old installation..."
+rm -rf "$INSTALL_DIR"
+
+# Move new version to installation directory
 echo "Installing new version..."
 mkdir -p "$(dirname "$INSTALL_DIR")"
-mv strema "$INSTALL_DIR"
+mv "$NEW_VERSION_DIR" "$INSTALL_DIR"
 
-# Fix ownership to match installation directory owner
-INSTALL_DIR_PARENT=$(dirname "$INSTALL_DIR")
-INSTALL_DIR_OWNER=$(stat -c '%U:%G' "$INSTALL_DIR_PARENT" 2>/dev/null || echo "root:root")
-if [ "$INSTALL_DIR_OWNER" != "root:root" ]; then
-    echo "Setting ownership to $INSTALL_DIR_OWNER..."
-    chown -R "$INSTALL_DIR_OWNER" "$INSTALL_DIR"
-fi
-
-# Restore config and logs
-if [ -d "$TMP_DIR/config.backup" ]; then
-    rm -rf "$INSTALL_DIR/config"
-    mv "$TMP_DIR/config.backup" "$INSTALL_DIR/config"
+# Restore configuration
+if [ -f "$TMP_BACKUP/stream.conf" ]; then
+    echo "Restoring configuration..."
+    cp "$TMP_BACKUP/stream.conf" "$INSTALL_DIR/config/stream.conf"
     echo "✅ Config restored"
 fi
 
-if [ -d "$TMP_DIR/logs.backup" ]; then
+# Restore logs
+if [ -d "$TMP_BACKUP/logs" ]; then
+    echo "Restoring logs..."
     rm -rf "$INSTALL_DIR/logs"
-    mv "$TMP_DIR/logs.backup" "$INSTALL_DIR/logs"
+    cp -r "$TMP_BACKUP/logs" "$INSTALL_DIR/logs"
     echo "✅ Logs restored"
 fi
 
-# Restore .git directory if it existed (for development)
-if [ -d "$TMP_DIR/git.backup" ]; then
-    mv "$TMP_DIR/git.backup" "$INSTALL_DIR/.git"
-    echo "✅ Git repository preserved"
-fi
-
-# Restore .github directory if it existed (for GitHub Actions)
-if [ -d "$TMP_DIR/github.backup" ]; then
-    mv "$TMP_DIR/github.backup" "$INSTALL_DIR/.github"
-    echo "✅ GitHub workflows preserved"
-fi
-
-# Clean up git working directory to avoid uncommitted changes
-if [ -d "$INSTALL_DIR/.git" ]; then
-    cd "$INSTALL_DIR"
-    # Only reset files that exist in the new version (avoid deleting .github)
-    git status --porcelain | grep '^ M' | awk '{print $2}' | xargs -r git checkout -- 2>/dev/null || true
-    # Clean untracked files that match .gitignore
-    git clean -fd 2>/dev/null || true
-    echo "✅ Git working directory cleaned"
-fi
-
-# Restore specific config file if backed up separately
-if [ -f "$TMP_DIR/stream.conf.backup" ]; then
-    cp "$TMP_DIR/stream.conf.backup" "$INSTALL_DIR/config/stream.conf"
-fi
-
-# Set permissions
+# Run installation
 echo ""
-echo "Setting permissions..."
-chmod +x "$INSTALL_DIR/scripts/"*.sh
-chmod +x "$INSTALL_DIR/web/web_config.py"
+echo "Running installation..."
+cd "$INSTALL_DIR"
+bash "$INSTALL_DIR/install.sh"
 
-# Fix all permissions using dedicated script
-if [ -f "$INSTALL_DIR/scripts/fix_permissions.sh" ]; then
-    echo "Running permissions fix script..."
-    bash "$INSTALL_DIR/scripts/fix_permissions.sh"
+# Trigger config change handler to restore auto-restart timer and other settings
+echo ""
+echo "Restoring configuration-dependent services..."
+if [ -f "$INSTALL_DIR/scripts/handle_config_change.sh" ]; then
+    # Force re-apply all settings by removing snapshot
+    rm -f "$INSTALL_DIR/config/.stream.conf.snapshot"
+    bash "$INSTALL_DIR/scripts/handle_config_change.sh"
+    echo "✅ Configuration settings applied"
 fi
 
-# Update systemd services
-echo ""
-echo "Updating systemd services..."
-sed "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$INSTALL_DIR/systemd/forpost-stream.service" > /etc/systemd/system/forpost-stream.service
-sed "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$INSTALL_DIR/systemd/forpost-stream-config.path" > /etc/systemd/system/forpost-stream-config.path
-sed "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$INSTALL_DIR/systemd/forpost-stream-web.service" > /etc/systemd/system/forpost-stream-web.service
-sed "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$INSTALL_DIR/systemd/forpost-stream-watchdog.service" > /etc/systemd/system/forpost-stream-watchdog.service
-sed "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$INSTALL_DIR/systemd/forpost-udp-proxy.service" > /etc/systemd/system/forpost-udp-proxy.service
-cp "$INSTALL_DIR/systemd/forpost-stream-restart.service" /etc/systemd/system/
-cp "$INSTALL_DIR/systemd/forpost-stream-autorestart.timer" /etc/systemd/system/
-cp "$INSTALL_DIR/systemd/forpost-stream-autorestart.service" /etc/systemd/system/
-cp "$INSTALL_DIR/systemd/forpost-stream-watchdog.timer" /etc/systemd/system/
-systemctl daemon-reload
-
-# Start services
-echo ""
-echo "Starting services..."
-systemctl start forpost-stream-web
-systemctl start forpost-stream-config.path
-systemctl start forpost-stream-watchdog.timer
-
-# Restart stream if it was active before update
+# Restart stream if it was active
 if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
-    echo "Restarting stream service (was active before update)..."
+    echo ""
+    echo "Restarting stream service..."
     
-    # Read config to check if UDP proxy is enabled
+    # Check if UDP proxy should be started
     CONFIG_FILE="$INSTALL_DIR/config/stream.conf"
     if [ -f "$CONFIG_FILE" ]; then
         USE_UDP_PROXY=$(grep "^USE_UDP_PROXY=" "$CONFIG_FILE" | cut -d'=' -f2 | tr -d '"' | tr -d "'" || echo "true")
         
-        # Start UDP proxy if enabled (same as web interface does)
         if [ "$USE_UDP_PROXY" = "true" ]; then
-            echo "Starting UDP proxy..."
             systemctl start forpost-udp-proxy 2>/dev/null || true
         fi
     fi
     
-    # Start stream service
     systemctl start forpost-stream
+    echo "✅ Stream service restarted"
 fi
 
-# Cleanup
+# Cleanup download directory
 cd /
-rm -rf "$TMP_DIR"
+rm -rf "$TMP_DOWNLOAD"
 
 echo ""
 echo "=========================================="

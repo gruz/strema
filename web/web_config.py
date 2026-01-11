@@ -214,7 +214,37 @@ def update_config():
         success, message = save_config(config_data)
         
         if success:
-            return jsonify({'success': True, 'message': message})
+            # Check if stream will be restarted
+            stream_restart_required = False
+            try:
+                # Check if stream is currently active
+                result = subprocess.run(
+                    ['systemctl', 'is-active', 'forpost-stream'],
+                    capture_output=True,
+                    text=True
+                )
+                stream_active = result.stdout.strip() == 'active'
+                
+                if stream_active:
+                    # Check if critical parameters changed by examining the log
+                    log_file = PROJECT_ROOT / 'logs' / 'config_handler.log'
+                    if log_file.exists():
+                        recent_log = subprocess.run(
+                            ['tail', '-20', str(log_file)],
+                            capture_output=True,
+                            text=True
+                        ).stdout
+                        
+                        if 'Stream-critical parameter changed' in recent_log:
+                            stream_restart_required = True
+            except:
+                pass
+            
+            return jsonify({
+                'success': True, 
+                'message': message,
+                'stream_restart_required': stream_restart_required
+            })
         else:
             return jsonify({'success': False, 'error': message}), 500
     except Exception as e:
@@ -279,146 +309,10 @@ def restart_service():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/reset-rp2040', methods=['POST'])
-def reset_rp2040():
-    """API endpoint to perform soft reset of RP2040 device."""
-    try:
-        reset_script = PROJECT_ROOT / 'scripts' / 'reset_rp2040_soft.sh'
-        
-        if not reset_script.exists():
-            return jsonify({'success': False, 'error': 'Reset script not found'}), 500
-        
-        result = subprocess.run(
-            ['bash', str(reset_script)],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if result.returncode == 0:
-            return jsonify({'success': True, 'message': 'RP2040 успішно перезавантажено'})
-        else:
-            error_msg = result.stderr.strip() if result.stderr else 'Unknown error'
-            return jsonify({'success': False, 'error': f'Помилка reset: {error_msg}'}), 500
-            
-    except subprocess.TimeoutExpired:
-        return jsonify({'success': False, 'error': 'Reset timeout (>10s)'}), 500
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/restart-dzyga', methods=['POST'])
-def restart_dzyga():
-    """API endpoint to restart Dzyga service."""
-    try:
-        # Try systemd service first
-        result = subprocess.run(
-            ['sudo', 'systemctl', 'restart', 'dzyga'],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if result.returncode == 0:
-            return jsonify({'success': True, 'message': 'Dzyga успішно перезавантажено'})
-        
-        # If systemd service doesn't exist, try to restart process manually
-        # First, find and kill the process
-        kill_result = subprocess.run(
-            ['sudo', 'pkill', '-f', '/home/rpidrone/FORPOST/dzyga$'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
-        # Wait a bit for process to stop
-        subprocess.run(['sleep', '2'])
-        
-        # Try to start it again (assuming it has auto-restart or will be started by user)
-        return jsonify({'success': True, 'message': 'Dzyga процес зупинено. Перезапустіть вручну або через systemd.'})
-            
-    except subprocess.TimeoutExpired:
-        return jsonify({'success': False, 'error': 'Restart timeout (>10s)'}), 500
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/stream/autostart', methods=['POST'])
-def set_autostart():
-    """API endpoint to enable/disable autostart on boot."""
-    try:
-        data = request.json
-        enable = data.get('enable', False)
-        
-        if enable:
-            result = os.system('sudo systemctl enable forpost-stream')
-            message = 'Autostart enabled'
-        else:
-            result = os.system('sudo systemctl disable forpost-stream')
-            message = 'Autostart disabled'
-        
-        if result == 0:
-            return jsonify({'success': True, 'message': message})
-        else:
-            return jsonify({'success': False, 'error': 'Failed to change autostart setting'}), 500
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/autorestart', methods=['GET'])
-def get_autorestart():
-    """API endpoint to get auto-restart configuration."""
-    try:
-        config, _ = parse_config()
-        enabled = config.get('AUTO_RESTART_ENABLED', 'false') == 'true'
-        interval = int(config.get('AUTO_RESTART_INTERVAL', '2'))
-        
-        # Check timer status
-        result = subprocess.run(
-            ['systemctl', 'is-active', 'forpost-stream-autorestart.timer'],
-            capture_output=True,
-            text=True
-        )
-        timer_active = result.stdout.strip() == 'active'
-        
-        return jsonify({
-            'enabled': enabled,
-            'interval': interval,
-            'timer_active': timer_active
-        })
-    except Exception as e:
-        return jsonify({'enabled': False, 'interval': 2, 'timer_active': False, 'error': str(e)})
-
-@app.route('/api/autorestart', methods=['POST'])
-def set_autorestart():
-    """API endpoint to configure auto-restart."""
-    try:
-        data = request.json
-        enabled = data.get('enabled', False)
-        interval = data.get('interval', 2)
-        
-        # Read current config
-        config, _ = parse_config()
-        
-        # Update auto-restart settings
-        config['AUTO_RESTART_ENABLED'] = 'true' if enabled else 'false'
-        config['AUTO_RESTART_INTERVAL'] = str(interval)
-        
-        # Save config
-        success, message = save_config(config)
-        if not success:
-            return jsonify({'success': False, 'error': message}), 500
-        
-        # Apply timer settings
-        script_path = PROJECT_ROOT / 'scripts' / 'update_autorestart.sh'
-        result = os.system(f'sudo bash {script_path}')
-        if result == 0:
-            return jsonify({'success': True, 'message': 'Auto-restart settings updated'})
-        else:
-            return jsonify({'success': False, 'error': 'Failed to update timer'}), 500
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
-    """API endpoint to get service status."""
+    """API endpoint to get service status and power state."""
     try:
         # Check if service is active
         result = subprocess.run(
@@ -429,28 +323,64 @@ def get_status():
         status = result.stdout.strip()
         active = status == 'active'
         
-        # Check if autostart is enabled
-        result_enabled = subprocess.run(
-            ['systemctl', 'is-enabled', 'forpost-stream'],
-            capture_output=True,
-            text=True
-        )
-        enabled = result_enabled.stdout.strip() == 'enabled'
+        # Get current power state
+        wifi_state = 'Увімкнено'
+        bluetooth_state = 'Увімкнено'
+        eth_state = 'Auto'
         
-        # Check auto-restart timer
-        config, _ = parse_config()
-        autorestart_enabled = config.get('AUTO_RESTART_ENABLED', 'false') == 'true'
-        autorestart_interval = int(config.get('AUTO_RESTART_INTERVAL', '2'))
+        try:
+            result = subprocess.run(['rfkill', 'list'], capture_output=True, text=True)
+            lines = result.stdout.split('\n')
+            
+            for i, line in enumerate(lines):
+                if 'Wireless LAN' in line:
+                    # Check next line for soft blocked status
+                    if i + 1 < len(lines) and 'Soft blocked: yes' in lines[i + 1]:
+                        wifi_state = 'Вимкнено'
+                    # else: remains 'Увімкнено' (default)
+                elif 'Bluetooth' in line:
+                    # Check next line for soft blocked status
+                    if i + 1 < len(lines) and 'Soft blocked: yes' in lines[i + 1]:
+                        bluetooth_state = 'Вимкнено'
+                    # else: remains 'Увімкнено' (default)
+        except:
+            pass
+        
+        try:
+            result = subprocess.run(['ethtool', 'eth0'], capture_output=True, text=True)
+            speed = 'auto'
+            autoneg = 'on'
+            for line in result.stdout.split('\n'):
+                if 'Speed:' in line:
+                    if '100Mb/s' in line:
+                        speed = '100'
+                    elif '1000Mb/s' in line or '1Gb/s' in line:
+                        speed = '1000'
+                if 'Auto-negotiation:' in line:
+                    autoneg = 'on' if 'on' in line.lower() else 'off'
+            
+            if speed == '1000' and autoneg == 'on':
+                eth_state = '1000Mbps (auto)'
+            elif speed == '1000' and autoneg == 'off':
+                eth_state = '1000Mbps (fixed)'
+            elif speed == '100' and autoneg == 'off':
+                eth_state = '100Mbps (fixed)'
+            else:
+                eth_state = f'{speed}Mbps'
+        except:
+            pass
         
         return jsonify({
             'status': status,
             'active': active,
-            'autostart': enabled,
-            'autorestart_enabled': autorestart_enabled,
-            'autorestart_interval': autorestart_interval
+            'power': {
+                'wifi': wifi_state,
+                'bluetooth': bluetooth_state,
+                'ethernet': eth_state
+            }
         })
     except Exception as e:
-        return jsonify({'status': 'unknown', 'active': False, 'autostart': False, 'autorestart_enabled': False, 'autorestart_interval': 2, 'error': str(e)})
+        return jsonify({'status': 'unknown', 'active': False, 'error': str(e)})
 
 @app.route('/api/updates/check', methods=['GET'])
 def check_updates():
@@ -558,58 +488,6 @@ def set_dynamic_overlay():
         return jsonify({'success': True, 'message': 'Dynamic overlay updated'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/power-settings', methods=['GET'])
-def get_power_settings():
-    """API endpoint to get current power saving settings."""
-    try:
-        config, _ = parse_config()
-        
-        # Get current system state
-        wifi_blocked = False
-        bluetooth_blocked = False
-        eth_speed = 'auto'
-        eth_autoneg = 'on'
-        
-        try:
-            result = subprocess.run(['rfkill', 'list'], capture_output=True, text=True)
-            if 'Wireless LAN' in result.stdout:
-                wifi_blocked = 'Soft blocked: yes' in result.stdout
-            if 'Bluetooth' in result.stdout:
-                bluetooth_blocked = 'Soft blocked: yes' in result.stdout
-        except:
-            pass
-        
-        
-        try:
-            result = subprocess.run(['ethtool', 'eth0'], capture_output=True, text=True)
-            for line in result.stdout.split('\n'):
-                if 'Speed:' in line:
-                    if '100Mb/s' in line:
-                        eth_speed = '100'
-                    elif '1000Mb/s' in line or '1Gb/s' in line:
-                        eth_speed = '1000'
-                if 'Auto-negotiation:' in line:
-                    eth_autoneg = 'on' if 'on' in line else 'off'
-        except:
-            pass
-        
-        return jsonify({
-            'config': {
-                'POWER_SAVE_WIFI': config.get('POWER_SAVE_WIFI', 'false'),
-                'POWER_SAVE_BLUETOOTH': config.get('POWER_SAVE_BLUETOOTH', 'false'),
-                'POWER_SAVE_ETH_SPEED': config.get('POWER_SAVE_ETH_SPEED', 'auto'),
-                'POWER_SAVE_ETH_AUTONEG': config.get('POWER_SAVE_ETH_AUTONEG', 'on')
-            },
-            'current': {
-                'wifi_blocked': wifi_blocked,
-                'bluetooth_blocked': bluetooth_blocked,
-                'eth_speed': eth_speed,
-                'eth_autoneg': eth_autoneg
-            }
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/config/raw', methods=['GET'])
 def get_raw_config():
@@ -789,38 +667,6 @@ def get_defaults():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-@app.route('/api/power-settings', methods=['POST'])
-def apply_power_settings():
-    """API endpoint to apply power saving settings."""
-    try:
-        data = request.json
-        
-        # Read current config
-        config, _ = parse_config()
-        
-        # Update power settings
-        config['POWER_SAVE_WIFI'] = data.get('POWER_SAVE_WIFI', 'false')
-        config['POWER_SAVE_BLUETOOTH'] = data.get('POWER_SAVE_BLUETOOTH', 'false')
-        config['POWER_SAVE_HDMI'] = data.get('POWER_SAVE_HDMI', 'false')
-        config['POWER_SAVE_ETH_SPEED'] = data.get('POWER_SAVE_ETH_SPEED', 'auto')
-        config['POWER_SAVE_ETH_AUTONEG'] = data.get('POWER_SAVE_ETH_AUTONEG', 'on')
-        
-        # Save config
-        success, message = save_config(config)
-        if not success:
-            return jsonify({'success': False, 'error': message}), 500
-        
-        # Apply settings immediately
-        script_path = PROJECT_ROOT / 'scripts' / 'apply_power_settings.sh'
-        result = os.system(f'sudo bash {script_path}')
-        
-        if result == 0:
-            return jsonify({'success': True, 'message': 'Налаштування енергозбереження застосовано'})
-        else:
-            return jsonify({'success': False, 'error': 'Не вдалося застосувати налаштування'}), 500
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8081, debug=False)

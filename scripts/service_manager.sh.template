@@ -7,6 +7,7 @@ AUTO_START_SERVICES=(
     "forpost-stream-config.path"
     "forpost-stream-web"
     "forpost-stream-watchdog.timer"
+    "forpost-dzyga-monitor.timer"
 )
 
 # Services that should only be enabled (started on boot, not immediately)

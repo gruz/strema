@@ -150,6 +150,7 @@ REQUIRED_FILES=(
     "$SCRIPT_DIR/scripts/watchdog.sh"
     "$SCRIPT_DIR/scripts/udp_proxy.sh"
     "$SCRIPT_DIR/scripts/service_manager.sh"
+    "$SCRIPT_DIR/scripts/handle_config_change.sh"
     "$CONFIG_TEMPLATE"
     "$SERVICE_FILE"
     "$SCRIPT_DIR/web/web_config.py"

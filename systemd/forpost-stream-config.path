@@ -3,7 +3,7 @@ Description=Watch Forpost Stream config for changes
 
 [Path]
 PathModified=__INSTALL_DIR__/config/stream.conf
-Unit=forpost-stream-restart.service
+Unit=forpost-stream-config.service
 
 [Install]
 WantedBy=multi-user.target

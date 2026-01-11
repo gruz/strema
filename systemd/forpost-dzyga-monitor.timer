@@ -1,0 +1,11 @@
+[Unit]
+Description=Dzyga Serial Port Monitor Timer
+Requires=forpost-dzyga-monitor.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
