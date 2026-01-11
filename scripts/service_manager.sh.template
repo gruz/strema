@@ -66,6 +66,30 @@ enable_services() {
     done
 }
 
+# Cleanup old/removed services that are no longer in systemd/ directory
+cleanup_old_services() {
+    local script_dir="$1"
+    local systemd_dir="$script_dir/systemd"
+    
+    echo "Cleaning up old services..."
+    
+    # Remove ALL forpost-* services from system that are not in current systemd/ directory
+    for service_file in /etc/systemd/system/forpost-*; do
+        [ -f "$service_file" ] || continue
+        local service_name=$(basename "$service_file")
+        
+        # Check if this service still exists in our systemd/ directory
+        if [ ! -f "$systemd_dir/$service_name" ]; then
+            echo "Removing old service: $service_name"
+            systemctl stop "$service_name" 2>/dev/null || true
+            systemctl disable "$service_name" 2>/dev/null || true
+            rm -f "/etc/systemd/system/$service_name"
+        fi
+    done
+    
+    systemctl daemon-reload
+}
+
 # Stop and disable all services, remove service files
 uninstall_all_services() {
     local script_dir="$1"

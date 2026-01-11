@@ -150,11 +150,11 @@ REQUIRED_FILES=(
     "$SCRIPT_DIR/scripts/udp_proxy.sh"
     "$SCRIPT_DIR/scripts/service_manager.sh"
     "$SCRIPT_DIR/scripts/handle_config_change.sh"
-    "$CONFIG_TEMPLATE"
-    "$SERVICE_FILE"
+    "$SCRIPT_DIR/scripts/update_autorestart.sh"
     "$SCRIPT_DIR/web/web_config.py"
     "$SCRIPT_DIR/web/templates/index.html"
-    "$SCRIPT_DIR/scripts/update_autorestart.sh"
+    "$SCRIPT_DIR/web/templates/installer.html"
+    "$SERVICE_FILE"
 )
 
 # VERSION file is optional - will be created by GitHub Action or get_version.sh
@@ -202,6 +202,7 @@ echo "All files in place."
 echo ""
 echo "[5/7] Installing systemd services..."
 source "$SCRIPT_DIR/scripts/service_manager.sh"
+cleanup_old_services "$SCRIPT_DIR"
 install_all_services "$SCRIPT_DIR"
 
 # Enable and start services

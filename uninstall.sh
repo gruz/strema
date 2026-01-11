@@ -15,6 +15,7 @@ if [ ! -f "$SCRIPT_DIR/scripts/service_manager.sh" ] && [ -f "$SCRIPT_DIR/script
     cp "$SCRIPT_DIR/scripts/service_manager.sh.template" "$SCRIPT_DIR/scripts/service_manager.sh"
 fi
 source "$SCRIPT_DIR/scripts/service_manager.sh"
+cleanup_old_services "$SCRIPT_DIR"
 uninstall_all_services "$SCRIPT_DIR"
 
 echo "Forpost Stream services removed."
