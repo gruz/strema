@@ -164,16 +164,6 @@ def save_config(config_data):
     except Exception as e:
         return False, str(e)
 
-@app.route('/raw-config')
-def raw_config():
-    """Raw configuration editor page."""
-    config, comments = parse_config()
-    config_exists = CONFIG_FILE.exists()
-    version = get_version()
-    
-    # For raw config, we don't check if config is ready - always allow access
-    return render_template('raw_config.html', config=config, comments=comments, version=version,
-                         header_title="Текстовий редактор конфігурації", show_cpu_mode=False)
 
 @app.route('/')
 def index():
