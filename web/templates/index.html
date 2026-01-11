@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FORPOST Stream - Конфігурація</title>
+    <link rel="stylesheet" href="/static/header_styles.css">
     <style>
+        
         * {
             margin: 0;
             padding: 0;
@@ -21,69 +23,6 @@
         .container {
             max-width: 800px;
             margin: 0 auto;
-        }
-
-        .header {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .header h1 {
-            color: #333;
-            font-size: 28px;
-            margin-bottom: 8px;
-        }
-
-        .header p {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 12px;
-        }
-
-        .status-active {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .status-inactive {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .status-pending {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .cpu-mode-badge {
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 12px;
-            margin-left: 8px;
-        }
-
-        .cpu-normal {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-
-        .cpu-high {
-            background: #fff3cd;
-            color: #856404;
         }
 
         .card {
@@ -277,15 +216,7 @@
     </div>
 
     <div class="container">
-        <div class="header">
-            <h1>🎥 FORPOST Stream</h1>
-            <p>Конфігурація відеопотоку <span style="color: #999; font-size: 12px;">v{{ version }}</span></p>
-            <div>
-                <span id="statusBadge"></span>
-                <span id="operationBadge" class="status-badge status-pending" style="display:none;"></span>
-                <span id="cpuModeBadge" class="cpu-mode-badge cpu-high">⚡ Перекодування</span>
-            </div>
-        </div>
+        {% include '_header.html' with context %}
 
         <div id="alertBox" class="alert"></div>
 
@@ -1904,6 +1835,264 @@
         
         setInterval(updateStatus, 10000);
         setInterval(checkUpdates, 300000); // Check updates every 5 minutes
+
+        // Raw configuration editor functions
+        function toggleRawEditor() {
+            const section = document.getElementById('rawEditorSection');
+            const icon = document.getElementById('rawEditorIcon');
+            
+            if (section.style.display === 'none') {
+                section.style.display = 'block';
+                icon.textContent = '▲';
+                // Auto-load current config when opening
+                loadRawConfig();
+                loadBackups();
+            } else {
+                section.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+
+        function loadBackups() {
+            const backupInfo = document.getElementById('backupInfo');
+            const backupList = document.getElementById('backupList');
+            
+            fetch('/api/config/backups')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.backups && data.backups.length > 0) {
+                        backupInfo.style.display = 'block';
+                        backupList.innerHTML = '';
+                        
+                        data.backups.forEach(backup => {
+                            const backupDiv = document.createElement('div');
+                            backupDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px; margin-bottom: 4px; background: white; border: 1px solid #ddd; border-radius: 4px;';
+                            
+                            backupDiv.innerHTML = `
+                                <span style="font-size: 12px;">
+                                    <strong>Бекап ${backup.number}:</strong> ${backup.modified}
+                                </span>
+                                <div style="display: flex; gap: 4px;">
+                                    <button type="button" onclick="viewBackup(${backup.number})" style="font-size: 11px; padding: 4px 8px; background: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                                        👁️
+                                    </button>
+                                    <button type="button" onclick="restoreBackup(${backup.number})" style="font-size: 11px; padding: 4px 8px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                                        🔄 Відновити
+                                    </button>
+                                </div>
+                            `;
+                            
+                            backupList.appendChild(backupDiv);
+                        });
+                    } else {
+                        backupInfo.style.display = 'block';
+                        backupList.innerHTML = '<span style="font-size: 12px; color: #666;">Резервні копії не знайдено</span>';
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load backups:', err);
+                    backupInfo.style.display = 'none';
+                });
+        }
+
+        function viewBackup(backupNum) {
+            fetch(`/api/config/backup/${backupNum}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.content) {
+                        const textarea = document.getElementById('rawConfigContent');
+                        textarea.value = data.content;
+                        showRawEditorStatus(`✅ Бекап ${backupNum} завантажено в редактор`, 'success');
+                    } else if (data.error) {
+                        showRawEditorStatus(`❌ Помилка завантаження: ${data.error}`, 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load backup:', err);
+                    showRawEditorStatus('❌ Помилка завантаження бекапу', 'error');
+                });
+        }
+
+        function restoreBackup(backupNum) {
+            if (!confirm(`⚠️ Відновлення з бекапу ${backupNum} перезапише поточну конфігурацію.\n\nПродовжити відновлення?`)) {
+                return;
+            }
+            
+            fetch(`/api/config/restore/${backupNum}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showRawEditorStatus(`✅ Конфігурацію відновлено з бекапу ${backupNum}`, 'success');
+                    // Reload the editor content and form data
+                    setTimeout(() => {
+                        loadRawConfig();
+                        loadConfig();
+                        loadBackups();
+                    }, 1000);
+                } else {
+                    showRawEditorStatus(`❌ Помилка відновлення: ${data.error}`, 'error');
+                }
+            })
+            .catch(err => {
+                console.error('Failed to restore backup:', err);
+                showRawEditorStatus('❌ Помилка відновлення конфігурації', 'error');
+            });
+        }
+
+        function loadDefaults() {
+            fetch('/api/config/defaults')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.content) {
+                        const textarea = document.getElementById('rawConfigContent');
+                        textarea.value = data.content;
+                        showRawEditorStatus('✅ Шаблон конфігурації з defaults завантажено', 'success');
+                    } else if (data.error) {
+                        showRawEditorStatus(`❌ Помилка завантаження шаблону: ${data.error}`, 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load defaults:', err);
+                    showRawEditorStatus('❌ Помилка завантаження шаблону', 'error');
+                });
+        }
+
+        function loadRawConfig() {
+            const textarea = document.getElementById('rawConfigContent');
+            const loadBtn = document.getElementById('loadRawBtn');
+            const statusDiv = document.getElementById('rawEditorStatus');
+            
+            loadBtn.disabled = true;
+            loadBtn.textContent = '⏳ Завантаження...';
+            statusDiv.style.display = 'none';
+            
+            fetch('/api/config/raw')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.content) {
+                        textarea.value = data.content;
+                        showRawEditorStatus('✅ Конфігурація завантажена успішно', 'success');
+                    } else if (data.error) {
+                        showRawEditorStatus(`❌ Помилка завантаження: ${data.error}`, 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load raw config:', err);
+                    showRawEditorStatus('❌ Помилка завантаження конфігурації', 'error');
+                })
+                .finally(() => {
+                    loadBtn.disabled = false;
+                    loadBtn.textContent = '📂 Завантажити поточну конфігурацію';
+                });
+        }
+
+        function saveRawConfig() {
+            const textarea = document.getElementById('rawConfigContent');
+            const saveBtn = document.getElementById('saveRawBtn');
+            const content = textarea.value.trim();
+            
+            if (!content) {
+                showRawEditorStatus('❌ Конфігураційний файл не може бути порожнім', 'error');
+                return;
+            }
+            
+            // Basic validation
+            const lines = content.split('\n');
+            const invalidLines = lines.filter(line => {
+                const trimmed = line.trim();
+                return trimmed && !trimmed.startsWith('#') && !trimmed.includes('=') && trimmed !== '';
+            });
+            
+            if (invalidLines.length > 0) {
+                showRawEditorStatus(`❌ Знайдено некоректні рядки: ${invalidLines.slice(0, 3).join(', ')}${invalidLines.length > 3 ? '...' : ''}`, 'error');
+                return;
+            }
+            
+            saveBtn.disabled = true;
+            saveBtn.textContent = '⏳ Збереження...';
+            
+            fetch('/api/config/raw', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ content: content })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showRawEditorStatus('✅ Конфігурація збережена успішно. Створено резервну копію.', 'success');
+                    // Reload form data and backups
+                    setTimeout(() => {
+                        loadConfig();
+                        loadBackups();
+                    }, 1000);
+                } else {
+                    showRawEditorStatus(`❌ Помилка збереження: ${data.error}`, 'error');
+                }
+            })
+            .catch(err => {
+                console.error('Failed to save raw config:', err);
+                showRawEditorStatus('❌ Помилка збереження конфігурації', 'error');
+            })
+            .finally(() => {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '💾 Зберегти конфігураційний файл';
+            });
+        }
+
+        function showRawEditorStatus(message, type) {
+            const statusDiv = document.getElementById('rawEditorStatus');
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            
+            if (type === 'success') {
+                statusDiv.style.background = '#d4edda';
+                statusDiv.style.color = '#155724';
+                statusDiv.style.border = '1px solid #c3e6cb';
+            } else {
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.border = '1px solid #f5c6cb';
+            }
+            
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 10000);
+        }
+
+        // Raw editor event listeners
+        document.getElementById('loadRawBtn').addEventListener('click', loadRawConfig);
+        document.getElementById('saveRawBtn').addEventListener('click', saveRawConfig);
+        document.getElementById('loadDefaultsBtn').addEventListener('click', loadDefaults);
+        
+        // Add keyboard shortcuts for raw editor
+        document.getElementById('rawConfigContent').addEventListener('keydown', function(e) {
+            // Ctrl+S to save
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                saveRawConfig();
+            }
+            // Ctrl+L to load
+            if (e.ctrlKey && e.key === 'l') {
+                e.preventDefault();
+                loadRawConfig();
+            }
+            // Tab support
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+                this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
+                this.selectionStart = this.selectionEnd = start + 4;
+            }
+        });
     </script>
 </body>
 </html>

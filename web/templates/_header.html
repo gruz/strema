@@ -1,0 +1,15 @@
+<div class="header">
+    <h1>🎥 FORPOST Stream</h1>
+    <p>{{ header_title }} <span style="color: #999; font-size: 12px;">v{{ version }}</span></p>
+    <div>
+        <span id="statusBadge"></span>
+        {% if show_cpu_mode %}
+        <span id="operationBadge" class="status-badge status-pending" style="display:none;"></span>
+        <span id="cpuModeBadge" class="cpu-mode-badge cpu-high">⚡ Перекодування</span>
+        {% endif %}
+    </div>
+    <div class="nav-buttons">
+        <a href="/" class="nav-btn {% if request.endpoint == 'index' %}nav-btn-primary{% else %}nav-btn-secondary{% endif %}">🏠 Форма налаштувань</a>
+        <a href="/raw-config" class="nav-btn {% if request.endpoint == 'raw_config' %}nav-btn-primary{% else %}nav-btn-secondary{% endif %}">📝 Текстовий редактор</a>
+    </div>
+</div>

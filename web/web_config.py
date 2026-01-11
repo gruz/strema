@@ -2,10 +2,10 @@
 import os
 import re
 import subprocess
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from pathlib import Path
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent
@@ -13,6 +13,11 @@ CONFIG_FILE = PROJECT_ROOT / 'config' / 'stream.conf'
 CONFIG_TEMPLATE = PROJECT_ROOT / 'config' / 'stream.conf.template'
 DEFAULTS_FILE = PROJECT_ROOT / 'config' / 'defaults.conf'
 VERSION_FILE = PROJECT_ROOT / 'VERSION'
+
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    """Serve static files."""
+    return send_from_directory('static', filename)
 
 def get_version():
     """Get application version from VERSION file."""
@@ -159,6 +164,17 @@ def save_config(config_data):
     except Exception as e:
         return False, str(e)
 
+@app.route('/raw-config')
+def raw_config():
+    """Raw configuration editor page."""
+    config, comments = parse_config()
+    config_exists = CONFIG_FILE.exists()
+    version = get_version()
+    
+    # For raw config, we don't check if config is ready - always allow access
+    return render_template('raw_config.html', config=config, comments=comments, version=version,
+                         header_title="Текстовий редактор конфігурації", show_cpu_mode=False)
+
 @app.route('/')
 def index():
     """Main page with configuration editor."""
@@ -166,8 +182,10 @@ def index():
     config_exists = CONFIG_FILE.exists()
     version = get_version()
     if (not config_exists) or (not is_config_ready(config)):
-        return render_template('installer.html', config=config, version=version)
-    return render_template('index.html', config=config, comments=comments, version=version)
+        return render_template('installer.html', config=config, version=version, 
+                             header_title="Конфігурація відеопотоку", show_cpu_mode=True)
+    return render_template('index.html', config=config, comments=comments, version=version,
+                         header_title="Конфігурація відеопотоку", show_cpu_mode=True)
 
 
 @app.route('/api/installer', methods=['POST'])
@@ -599,6 +617,185 @@ def get_power_settings():
                 'eth_speed': eth_speed,
                 'eth_autoneg': eth_autoneg
             }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/config/raw', methods=['GET'])
+def get_raw_config():
+    """API endpoint to get raw configuration file content."""
+    try:
+        if not CONFIG_FILE.exists():
+            if CONFIG_TEMPLATE.exists():
+                with open(CONFIG_TEMPLATE, 'r') as f:
+                    content = f.read()
+            else:
+                return jsonify({'error': 'Configuration file not found'}), 404
+        else:
+            with open(CONFIG_FILE, 'r') as f:
+                content = f.read()
+        
+        return jsonify({'content': content})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/config/raw', methods=['POST'])
+def save_raw_config():
+    """API endpoint to save raw configuration file content with 3-backup rotation."""
+    try:
+        data = request.json
+        content = data.get('content', '')
+        
+        if not content.strip():
+            return jsonify({'success': False, 'error': 'Configuration content cannot be empty'}), 400
+        
+        # Rotate backups: backup.2 -> backup.3, backup.1 -> backup.2, current -> backup.1
+        backup_3 = CONFIG_FILE.with_suffix('.conf.backup.3')
+        backup_2 = CONFIG_FILE.with_suffix('.conf.backup.2')
+        backup_1 = CONFIG_FILE.with_suffix('.conf.backup.1')
+        
+        # Remove oldest backup if exists
+        if backup_3.exists():
+            backup_3.unlink()
+        
+        # Rotate backups
+        if backup_2.exists():
+            backup_2.rename(backup_3)
+        if backup_1.exists():
+            backup_1.rename(backup_2)
+        
+        # Create backup of current config
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, 'r') as f:
+                backup_content = f.read()
+            with open(backup_1, 'w') as f:
+                f.write(backup_content)
+        
+        # Save new content
+        with open(CONFIG_FILE, 'w') as f:
+            f.write(content)
+        
+        # Set ownership to original user (not root)
+        try:
+            import pwd
+            sudo_user = os.environ.get('SUDO_USER')
+            if sudo_user:
+                pw_record = pwd.getpwnam(sudo_user)
+                os.chown(CONFIG_FILE, pw_record.pw_uid, pw_record.pw_gid)
+        except:
+            pass
+        
+        return jsonify({'success': True, 'message': 'Configuration saved successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/config/backups', methods=['GET'])
+def get_backups():
+    """API endpoint to get list of available backups."""
+    try:
+        backups = []
+        
+        for i in range(1, 4):
+            backup_file = CONFIG_FILE.with_suffix(f'.conf.backup.{i}')
+            if backup_file.exists():
+                import datetime
+                mtime = backup_file.stat().st_mtime
+                mod_time = datetime.datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+                backups.append({
+                    'number': i,
+                    'filename': backup_file.name,
+                    'modified': mod_time
+                })
+        
+        return jsonify({'backups': backups})
+    except Exception as e:
+        return jsonify({'backups': [], 'error': str(e)}), 500
+
+@app.route('/api/config/backup/<int:backup_num>', methods=['GET'])
+def get_backup_content(backup_num):
+    """API endpoint to get backup content."""
+    try:
+        if backup_num < 1 or backup_num > 3:
+            return jsonify({'error': 'Invalid backup number'}), 400
+        
+        backup_file = CONFIG_FILE.with_suffix(f'.conf.backup.{backup_num}')
+        
+        if not backup_file.exists():
+            return jsonify({'error': f'Backup {backup_num} not found'}), 404
+        
+        with open(backup_file, 'r') as f:
+            content = f.read()
+        
+        import datetime
+        mtime = backup_file.stat().st_mtime
+        mod_time = datetime.datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+        
+        return jsonify({
+            'content': content,
+            'filename': backup_file.name,
+            'modified': mod_time,
+            'number': backup_num
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/config/restore/<int:backup_num>', methods=['POST'])
+def restore_from_backup(backup_num):
+    """API endpoint to restore configuration from backup."""
+    try:
+        if backup_num < 1 or backup_num > 3:
+            return jsonify({'success': False, 'error': 'Invalid backup number'}), 400
+        
+        backup_file = CONFIG_FILE.with_suffix(f'.conf.backup.{backup_num}')
+        
+        if not backup_file.exists():
+            return jsonify({'success': False, 'error': f'Backup {backup_num} not found'}), 404
+        
+        # Read backup content
+        with open(backup_file, 'r') as f:
+            backup_content = f.read()
+        
+        # Save backup content as current config
+        with open(CONFIG_FILE, 'w') as f:
+            f.write(backup_content)
+        
+        # Set ownership to original user (not root)
+        try:
+            import pwd
+            sudo_user = os.environ.get('SUDO_USER')
+            if sudo_user:
+                pw_record = pwd.getpwnam(sudo_user)
+                os.chown(CONFIG_FILE, pw_record.pw_uid, pw_record.pw_gid)
+        except:
+            pass
+        
+        return jsonify({'success': True, 'message': f'Configuration restored from backup {backup_num}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/config/defaults', methods=['GET'])
+def get_defaults():
+    """API endpoint to get template configuration with defaults applied."""
+    try:
+        if not CONFIG_TEMPLATE.exists():
+            return jsonify({'error': 'Template file not found'}), 404
+        
+        # Read template
+        with open(CONFIG_TEMPLATE, 'r') as f:
+            template_content = f.read()
+        
+        # Parse defaults to replace placeholders
+        defaults = parse_defaults()
+        
+        # Replace placeholders with defaults
+        result_content = template_content
+        for key, value in defaults.items():
+            placeholder = f'__{key}__'  # Double underscore like in template
+            result_content = result_content.replace(placeholder, value)
+        
+        return jsonify({
+            'content': result_content,
+            'filename': CONFIG_TEMPLATE.name
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
