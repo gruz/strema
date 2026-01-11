@@ -360,6 +360,35 @@
         </div>
 
         <div class="card">
+            <div class="section-title">🔧 Діагностика</div>
+            
+            <div style="background: #d1ecf1; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #17a2b8;">
+                <strong style="color: #0c5460;">🔄 Reset RP2040:</strong>
+                <p style="margin: 8px 0 0 0; font-size: 13px; color: #0c5460;">
+                    Спробувати при помилці "No serial port" або зависанні контролера частот (багато "No data > 2s" у логах). Виконує м'який reset без переривання роботи системи.
+                </p>
+            </div>
+
+            <div style="background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #ffc107;">
+                <strong style="color: #856404;">🔄 Перезавантаження Dzyga:</strong>
+                <p style="margin: 8px 0 0 0; font-size: 13px; color: #856404;">
+                    Перезавантажує модуль пошуку частот. Використовувати при проблемах з підключенням до RP2040 або зависанні сервіса.
+                </p>
+            </div>
+
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" id="resetRp2040Btn" style="background: #ffc107; color: #333;">
+                    🔄 Reset RP2040
+                </button>
+                <button type="button" class="btn btn-secondary" id="restartDzygaBtn" style="background: #17a2b8; color: white;">
+                    🔄 Перезавантажити Dzyga
+                </button>
+            </div>
+
+            <div id="rp2040ResetStatus" style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
+        </div>
+
+        <div class="card">
             <div class="section-title" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="togglePowerSettings()">
                 <span>⚡ Енергозбереження <span style="font-size: 12px; color: #999;">(для довгих PoE кабелів)</span></span>
                 <span id="powerSettingsIcon" style="font-size: 20px;">▼</span>
@@ -1238,6 +1267,114 @@
             .catch(err => {
                 showAlert('❌ Помилка: ' + err.message, 'error');
                 clearOperationBadge();
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            });
+        });
+
+        // Reset RP2040 button
+        document.getElementById('resetRp2040Btn').addEventListener('click', function() {
+            if (!confirm('Виконати м\'який reset RP2040? Це допоможе при зависанні контролера частот.')) {
+                return;
+            }
+
+            const btn = this;
+            const statusDiv = document.getElementById('rp2040ResetStatus');
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Виконується reset...';
+            
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = '#fff3cd';
+            statusDiv.style.color = '#856404';
+            statusDiv.textContent = '⏳ Виконується м\'який reset RP2040...';
+
+            fetch('/api/reset-rp2040', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    statusDiv.style.background = '#d4edda';
+                    statusDiv.style.color = '#155724';
+                    statusDiv.textContent = '✅ ' + data.message;
+                    showAlert('✅ ' + data.message, 'success');
+                } else {
+                    statusDiv.style.background = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    statusDiv.textContent = '❌ ' + data.error;
+                    showAlert('❌ ' + data.error, 'error');
+                }
+                
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 10000);
+            })
+            .catch(err => {
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.textContent = '❌ Помилка: ' + err.message;
+                showAlert('❌ Помилка: ' + err.message, 'error');
+                
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 10000);
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            });
+        });
+
+        // Restart Dzyga button
+        document.getElementById('restartDzygaBtn').addEventListener('click', function() {
+            if (!confirm('Перезавантажити Dzyga сервіс? Це перезапустить модуль пошуку частот.')) {
+                return;
+            }
+
+            const btn = this;
+            const statusDiv = document.getElementById('rp2040ResetStatus');
+            btn.disabled = true;
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Перезапуск...';
+            
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = '#fff3cd';
+            statusDiv.style.color = '#856404';
+            statusDiv.textContent = '⏳ Перезапуск Dzyga сервіса...';
+
+            fetch('/api/restart-dzyga', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    statusDiv.style.background = '#d4edda';
+                    statusDiv.style.color = '#155724';
+                    statusDiv.textContent = '✅ ' + data.message;
+                    showAlert('✅ ' + data.message, 'success');
+                } else {
+                    statusDiv.style.background = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    statusDiv.textContent = '❌ ' + data.error;
+                    showAlert('❌ ' + data.error, 'error');
+                }
+                
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 10000);
+            })
+            .catch(err => {
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.textContent = '❌ Помилка: ' + err.message;
+                showAlert('❌ Помилка: ' + err.message, 'error');
+                
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 10000);
             })
             .finally(() => {
                 btn.disabled = false;

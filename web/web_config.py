@@ -271,6 +271,68 @@ def restart_service():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/reset-rp2040', methods=['POST'])
+def reset_rp2040():
+    """API endpoint to perform soft reset of RP2040 device."""
+    try:
+        reset_script = PROJECT_ROOT / 'scripts' / 'reset_rp2040_soft.sh'
+        
+        if not reset_script.exists():
+            return jsonify({'success': False, 'error': 'Reset script not found'}), 500
+        
+        result = subprocess.run(
+            ['bash', str(reset_script)],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            return jsonify({'success': True, 'message': 'RP2040 успішно перезавантажено'})
+        else:
+            error_msg = result.stderr.strip() if result.stderr else 'Unknown error'
+            return jsonify({'success': False, 'error': f'Помилка reset: {error_msg}'}), 500
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': 'Reset timeout (>10s)'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/restart-dzyga', methods=['POST'])
+def restart_dzyga():
+    """API endpoint to restart Dzyga service."""
+    try:
+        # Try systemd service first
+        result = subprocess.run(
+            ['sudo', 'systemctl', 'restart', 'dzyga'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            return jsonify({'success': True, 'message': 'Dzyga успішно перезавантажено'})
+        
+        # If systemd service doesn't exist, try to restart process manually
+        # First, find and kill the process
+        kill_result = subprocess.run(
+            ['sudo', 'pkill', '-f', '/home/rpidrone/FORPOST/dzyga$'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        # Wait a bit for process to stop
+        subprocess.run(['sleep', '2'])
+        
+        # Try to start it again (assuming it has auto-restart or will be started by user)
+        return jsonify({'success': True, 'message': 'Dzyga процес зупинено. Перезапустіть вручну або через systemd.'})
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': 'Restart timeout (>10s)'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/stream/autostart', methods=['POST'])
 def set_autostart():
     """API endpoint to enable/disable autostart on boot."""
