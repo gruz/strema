@@ -77,7 +77,13 @@ def parse_config():
             current_comment.append(line[1:].strip())
         elif line and '=' in line:
             key, value = line.split('=', 1)
-            config[key.strip()] = value.strip()
+            value = value.strip()
+            
+            # Remove quotes if present
+            if value.startswith('"') and value.endswith('"'):
+                value = value[1:-1]
+            
+            config[key.strip()] = value
             if current_comment:
                 comments[key.strip()] = '\n'.join(current_comment)
                 current_comment = []
