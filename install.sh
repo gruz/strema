@@ -112,8 +112,6 @@ else
     SCRIPT_DIR="$INSTALL_DIR"
 fi
 
-SERVICE_NAME="forpost-stream"
-SERVICE_FILE="$SCRIPT_DIR/systemd/forpost-stream.service"
 CONFIG_FILE="$SCRIPT_DIR/config/stream.conf"
 
 # Install dependencies
@@ -154,7 +152,6 @@ REQUIRED_FILES=(
     "$SCRIPT_DIR/web/web_config.py"
     "$SCRIPT_DIR/web/templates/index.html"
     "$SCRIPT_DIR/web/templates/installer.html"
-    "$SERVICE_FILE"
 )
 
 # VERSION file is optional - will be created by GitHub Action or get_version.sh
@@ -187,15 +184,6 @@ echo "Fixing ownership of config and logs directories..."
 chown -R "$ORIGINAL_UID:$ORIGINAL_GID" "$SCRIPT_DIR/config" 2>/dev/null || true
 chown -R "$ORIGINAL_UID:$ORIGINAL_GID" "$SCRIPT_DIR/logs" 2>/dev/null || true
 
-# Fix ownership of existing config file if it's owned by root
-if [ -f "$CONFIG_FILE" ]; then
-    FILE_OWNER=$(stat -c '%u' "$CONFIG_FILE")
-    if [ "$FILE_OWNER" = "0" ]; then
-        echo "Config file owned by root, changing to $ORIGINAL_USER..."
-        chown "$ORIGINAL_UID:$ORIGINAL_GID" "$CONFIG_FILE"
-    fi
-fi
-
 echo "All files in place."
 
 # Install systemd service
@@ -217,11 +205,8 @@ echo "Installation complete!"
 echo "=========================================="
 echo ""
 echo "[7/7] Getting network information..."
-IP_ADDRESS=$(echo "${SSH_CONNECTION:-}" | awk '{print $3}')
-if [ -z "$IP_ADDRESS" ]; then
-    IP_ADDRESS=$(hostname -I | awk '{print $1}')
-fi
 ALL_IPS=$(hostname -I 2>/dev/null | xargs)
+IP_ADDRESS=$(echo "$ALL_IPS" | awk '{print $1}')
 echo ""
 echo "🌐 Web Interface: http://$IP_ADDRESS:8081"
 if [ -n "$ALL_IPS" ]; then
@@ -233,9 +218,9 @@ echo "   Use the web interface to start/stop/configure streaming."
 echo ""
 echo "Useful commands:"
 echo "  Web UI:     sudo systemctl status forpost-stream-web"
-echo "  Stream:     sudo systemctl status $SERVICE_NAME"
+echo "  Stream:     sudo systemctl status forpost-stream"
 echo "  Watchdog:   sudo systemctl status forpost-stream-watchdog.timer"
-echo "  Logs:       sudo journalctl -u $SERVICE_NAME -f"
+echo "  Logs:       sudo journalctl -u forpost-stream -f"
 echo "  Stream log: tail -f $SCRIPT_DIR/logs/stream.log"
 echo "  Watchdog:   tail -f $SCRIPT_DIR/logs/watchdog.log"
 echo ""

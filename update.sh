@@ -37,8 +37,8 @@ restore_stash_on_interrupt() {
     fi
 }
 
-# Set trap to restore stash on script interruption
-trap restore_stash_on_interrupt INT TERM
+# Set trap to restore stash on script interruption and exit
+trap restore_stash_on_interrupt INT TERM EXIT
 
 # Step 1: Check for local changes and handle them
 echo "[1/5] Checking for local changes..."
@@ -141,7 +141,7 @@ echo ""
 
 # Step 5: Run install script
 echo "[5/7] Running install script..."
-./install.sh 2>&1 | grep -v "^\[" || true
+./install.sh 2>&1 | grep -v "^\[[0-9]/[0-9]\]" || true
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
     echo "ERROR: install.sh failed"
     exit 1
@@ -151,8 +151,7 @@ echo ""
 
 # Step 6: Restart web interface
 echo "[6/7] Restarting web interface..."
-systemctl restart forpost-stream-web
-if [ $? -eq 0 ]; then
+if systemctl restart forpost-stream-web; then
     echo "✓ Web interface restarted"
 else
     echo "⚠ Failed to restart web interface"
@@ -165,19 +164,31 @@ if [ -n "$ACTIVE_SERVICES" ]; then
     # Restart services in dependency order (proxy first, then stream)
     if echo "$ACTIVE_SERVICES" | grep -q "forpost-udp-proxy"; then
         echo "Restarting forpost-udp-proxy (dependency first)..."
-        systemctl restart forpost-udp-proxy
+        if systemctl restart forpost-udp-proxy; then
+            echo "✅ UDP proxy restarted"
+        else
+            echo "⚠️ Failed to restart UDP proxy"
+        fi
     fi
     
     if echo "$ACTIVE_SERVICES" | grep -q "forpost-stream"; then
         echo "Restarting forpost-stream (depends on proxy)..."
-        systemctl restart forpost-stream
+        if systemctl restart forpost-stream; then
+            echo "✅ Stream restarted"
+        else
+            echo "⚠️ Failed to restart stream"
+        fi
     fi
     
     # Restart any other active services
     for service in $ACTIVE_SERVICES; do
         if [[ "$service" != "forpost-udp-proxy" && "$service" != "forpost-stream" ]]; then
             echo "Restarting $service..."
-            systemctl restart "$service"
+            if systemctl restart "$service"; then
+                echo "✅ $service restarted"
+            else
+                echo "⚠️ Failed to restart $service"
+            fi
         fi
     done
 else
@@ -196,7 +207,5 @@ if [ -f "$SCRIPT_DIR/VERSION" ]; then
     echo "Current version: $VERSION"
 fi
 
-# Show web interface URL
-IP_ADDRESS=$(hostname -I | awk '{print $1}')
-echo "Web interface: http://$IP_ADDRESS:8081"
+# Web interface URL is already shown by install.sh, no need to duplicate
 echo ""
