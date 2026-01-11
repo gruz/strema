@@ -115,7 +115,6 @@ fi
 SERVICE_NAME="forpost-stream"
 SERVICE_FILE="$SCRIPT_DIR/systemd/forpost-stream.service"
 CONFIG_FILE="$SCRIPT_DIR/config/stream.conf"
-CONFIG_TEMPLATE="$SCRIPT_DIR/config/stream.conf.template"
 
 # Install dependencies
 echo ""

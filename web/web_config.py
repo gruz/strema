@@ -10,7 +10,6 @@ app = Flask(__name__, static_folder='static')
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent
 CONFIG_FILE = PROJECT_ROOT / 'config' / 'stream.conf'
-CONFIG_TEMPLATE = PROJECT_ROOT / 'config' / 'stream.conf.template'
 DEFAULTS_FILE = PROJECT_ROOT / 'config' / 'defaults.conf'
 VERSION_FILE = PROJECT_ROOT / 'VERSION'
 
@@ -29,11 +28,10 @@ def get_version():
     return "unknown"
 
 
-def is_config_ready(config: dict) -> bool:
+def is_config_ready(config):
+    """Check if configuration is ready for streaming."""
     rtmp = (config.get('RTMP_URL') or '').strip()
     if not rtmp:
-        return False
-    if '__RTMP_URL__' in rtmp:
         return False
     return True
 
@@ -61,44 +59,30 @@ def parse_defaults():
     return defaults
 
 def parse_config():
-    """Parse configuration file into a dictionary."""
+    """Parse configuration file with comments support."""
     config = {}
     comments = {}
     
     if not CONFIG_FILE.exists():
-        if CONFIG_TEMPLATE.exists():
-            with open(CONFIG_TEMPLATE, 'r') as f:
-                content = f.read()
-        else:
-            return {}, {}
-    else:
-        with open(CONFIG_FILE, 'r') as f:
-            content = f.read()
+        return {}, {}
     
+    with open(CONFIG_FILE, 'r') as f:
+        content = f.read()
+    
+    # Parse config content with comments
     current_comment = []
     for line in content.split('\n'):
-        line_stripped = line.strip()
-        
-        if line_stripped.startswith('#'):
-            current_comment.append(line_stripped[1:].strip())
-        elif '=' in line_stripped and not line_stripped.startswith('#'):
-            key, value = line_stripped.split('=', 1)
-            key = key.strip()
-            value = value.strip()
-            
-            # Remove inline comments
-            if '#' in value:
-                value = value.split('#')[0].strip()
-            
-            if value.startswith('"') and value.endswith('"'):
-                value = value[1:-1]
-            
-            config[key] = value
+        line = line.strip()
+        if line.startswith('#'):
+            current_comment.append(line[1:].strip())
+        elif line and '=' in line:
+            key, value = line.split('=', 1)
+            config[key.strip()] = value.strip()
             if current_comment:
-                comments[key] = ' '.join(current_comment)
+                comments[key.strip()] = '\n'.join(current_comment)
                 current_comment = []
-        elif not line_stripped:
-            current_comment = []
+        elif line:
+            current_comment.append(line)
     
     # Apply default values for missing configuration parameters
     defaults = parse_defaults()
@@ -110,24 +94,24 @@ def parse_config():
 
 def save_config(config_data):
     """Save configuration to file."""
-    if not CONFIG_FILE.exists() and CONFIG_TEMPLATE.exists():
-        with open(CONFIG_TEMPLATE, 'r') as f:
-            template_content = f.read()
+    # Create config file with defaults if it doesn't exist
+    if not CONFIG_FILE.exists():
+        defaults = parse_defaults()
         with open(CONFIG_FILE, 'w') as f:
-            f.write(template_content)
+            for key, value in defaults.items():
+                f.write(f"{key}={value}\n")
         # Set ownership to original user (not root)
         try:
             import pwd
             sudo_user = os.environ.get('SUDO_USER')
             if sudo_user:
-                pw_record = pwd.getpwnam(sudo_user)
-                os.chown(CONFIG_FILE, pw_record.pw_uid, pw_record.pw_gid)
+                uid = pwd.getpwnam(sudo_user).pw_uid
+                gid = pwd.getpwnam(sudo_user).pw_gid
+                os.chown(CONFIG_FILE, uid, gid)
         except:
             pass
     
-    if not CONFIG_FILE.exists():
-        return False, "Configuration file not found"
-    
+        
     with open(CONFIG_FILE, 'r') as f:
         lines = f.readlines()
     
@@ -494,8 +478,9 @@ def get_raw_config():
     """API endpoint to get raw configuration file content."""
     try:
         if not CONFIG_FILE.exists():
-            if CONFIG_TEMPLATE.exists():
-                with open(CONFIG_TEMPLATE, 'r') as f:
+            # Return defaults.conf as initial content
+            if DEFAULTS_FILE.exists():
+                with open(DEFAULTS_FILE, 'r') as f:
                     content = f.read()
             else:
                 return jsonify({'error': 'Configuration file not found'}), 404
@@ -640,33 +625,6 @@ def restore_from_backup(backup_num):
         return jsonify({'success': True, 'message': f'Configuration restored from backup {backup_num}'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/config/defaults', methods=['GET'])
-def get_defaults():
-    """API endpoint to get template configuration with defaults applied."""
-    try:
-        if not CONFIG_TEMPLATE.exists():
-            return jsonify({'error': 'Template file not found'}), 404
-        
-        # Read template
-        with open(CONFIG_TEMPLATE, 'r') as f:
-            template_content = f.read()
-        
-        # Parse defaults to replace placeholders
-        defaults = parse_defaults()
-        
-        # Replace placeholders with defaults
-        result_content = template_content
-        for key, value in defaults.items():
-            placeholder = f'__{key}__'  # Double underscore like in template
-            result_content = result_content.replace(placeholder, value)
-        
-        return jsonify({
-            'content': result_content,
-            'filename': CONFIG_TEMPLATE.name
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8081, debug=False)

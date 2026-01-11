@@ -157,13 +157,13 @@
                 <div class="form-group">
                     <label for="RTMP_URL">RTMP URL</label>
                     <span class="help-text">Обов'язково. Повний URL (напр. rtmps://server:port/app/key)</span>
-                    <input type="text" id="RTMP_URL" required placeholder="rtmps://server:port/app/key" value="{{ (config.get('RTMP_URL') or '') if (config.get('RTMP_URL') and '__RTMP_URL__' not in config.get('RTMP_URL')) else '' }}">
+                    <input type="text" id="RTMP_URL" required placeholder="rtmps://server:port/app/key" value="{{ config.get('RTMP_URL') or '' }}">
                 </div>
 
                 <div class="form-group">
                     <label for="OVERLAY_TEXT">Текст оверлею (опційно)</label>
                     <span class="help-text">Залиште пустим, щоб оверлей був вимкнений</span>
-                    <input type="text" id="OVERLAY_TEXT" placeholder="Напр. [ДЗИГА]" value="{{ (config.get('OVERLAY_TEXT') or '') if (config.get('OVERLAY_TEXT') and '__OVERLAY_TEXT__' not in config.get('OVERLAY_TEXT')) else '' }}">
+                    <input type="text" id="OVERLAY_TEXT" placeholder="Напр. [ДЗИГА]" value="{{ config.get('OVERLAY_TEXT') or '' }}">
                 </div>
 
                 <button type="submit" class="btn" id="saveBtn">Зберегти</button>

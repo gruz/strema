@@ -74,7 +74,7 @@ else
 fi
 
 # Validate required settings
-if [ -z "${RTMP_URL}" ] || [[ "${RTMP_URL}" == *"__RTMP_URL__"* ]]; then
+if [ -z "${RTMP_URL}" ]; then
     log "ERROR: RTMP_URL is not configured. Open the web interface and set RTMP URL, then restart the service."
     exit 1
 fi
