@@ -159,12 +159,26 @@ else
 fi
 echo ""
 
-# Step 7: Restart active services
+# Step 7: Restart active services in correct order
 echo "[7/7] Restarting active services..."
 if [ -n "$ACTIVE_SERVICES" ]; then
+    # Restart services in dependency order (proxy first, then stream)
+    if echo "$ACTIVE_SERVICES" | grep -q "forpost-udp-proxy"; then
+        echo "Restarting forpost-udp-proxy (dependency first)..."
+        systemctl restart forpost-udp-proxy
+    fi
+    
+    if echo "$ACTIVE_SERVICES" | grep -q "forpost-stream"; then
+        echo "Restarting forpost-stream (depends on proxy)..."
+        systemctl restart forpost-stream
+    fi
+    
+    # Restart any other active services
     for service in $ACTIVE_SERVICES; do
-        echo "Restarting $service..."
-        systemctl restart "$service"
+        if [[ "$service" != "forpost-udp-proxy" && "$service" != "forpost-stream" ]]; then
+            echo "Restarting $service..."
+            systemctl restart "$service"
+        fi
     done
 else
     echo "No active services to restart"
