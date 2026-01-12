@@ -41,13 +41,20 @@ else
     echo "🌐 Remote installation - downloading from GitHub"
     LOCAL_INSTALL=false
     
-    # Backup existing config if present
+    # Check if this is an update (installation directory already exists)
+    IS_UPDATE=false
     if [ -d "$INSTALL_DIR" ]; then
-        echo "⚠️  Installation directory exists, backing up config..."
-        TMP_BACKUP=$(mktemp -d)
+        echo "⚠️  Installation directory exists - this is an update"
+        IS_UPDATE=true
+        
+        # Backup existing config if present
         if [ -f "$INSTALL_DIR/config/stream.conf" ]; then
+            echo "Backing up configuration..."
+            TMP_BACKUP=$(mktemp -d)
             cp "$INSTALL_DIR/config/stream.conf" "$TMP_BACKUP/stream.conf.backup"
         fi
+    else
+        echo "Fresh installation detected"
     fi
     
     # Determine installation source
@@ -222,8 +229,36 @@ install_all_services "$SCRIPT_DIR"
 # Enable and start services
 echo ""
 echo "[6/7] Enabling services..."
+
+# Check if this is an update and restart services accordingly
+if [ "$IS_UPDATE" = "true" ]; then
+    echo "Update mode - restarting running services..."
+    
+    # Restart services that are already running to apply new code
+    if systemctl is-active --quiet forpost-stream-web 2>/dev/null; then
+        echo "Restarting web service..."
+        systemctl restart forpost-stream-web
+    else
+        echo "Starting web service..."
+        systemctl start forpost-stream-web
+    fi
+
+    if systemctl is-active --quiet forpost-stream 2>/dev/null; then
+        echo "Restarting stream service..."
+        systemctl restart forpost-stream
+    fi
+
+    if systemctl is-active --quiet forpost-stream-watchdog.timer 2>/dev/null; then
+        echo "Restarting watchdog timer..."
+        systemctl restart forpost-stream-watchdog.timer
+    fi
+else
+    echo "Fresh installation - starting services normally..."
+fi
+
+# Enable all services
 enable_services
-echo "Power settings service enabled (will apply on boot)"
+echo "All services enabled and started"
 
 echo ""
 echo "=========================================="
