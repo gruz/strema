@@ -300,6 +300,19 @@ def restart_service():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/restart-dzyga', methods=['POST'])
+def restart_dzyga():
+    """API endpoint to restart the Dzyga monitor service."""
+    try:
+        result = os.system('sudo systemctl restart forpost-dzyga-monitor.service')
+        if result == 0:
+            return jsonify({'success': True, 'message': 'Dzyga сервіс успішно перезапущено'})
+        else:
+            return jsonify({'success': False, 'error': 'Не вдалося перезапустити Dzyga сервіс'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/status', methods=['GET'])
 def get_status():
     """API endpoint to get service status and power state."""
