@@ -19,7 +19,7 @@ git commit -m "Your changes description"
 git tag v0.1.1
 
 # Запуште тег на GitHub
-git push origin main
+git push origin master
 git push origin v0.1.1
 ```
 
@@ -29,7 +29,7 @@ git push origin v0.1.1
 git tag v0.2.0-beta.1
 
 # Запуште тег на GitHub
-git push origin main
+git push origin master
 git push origin v0.2.0-beta.1
 ```
 
