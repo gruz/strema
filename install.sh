@@ -232,43 +232,25 @@ echo "[6/7] Enabling services..."
 
 # Check if this is an update and restart services accordingly
 if [ "$IS_UPDATE" = "true" ]; then
-    echo "Update mode - restarting running services..."
+    echo "Update mode - applying configuration and restarting services..."
     
-    # Save state of services before enable_services modifies them
-    WEB_WAS_ACTIVE=false
-    STREAM_WAS_ACTIVE=false
-    WATCHDOG_WAS_ACTIVE=false
+    # Always restart web service to apply new code
+    echo "Restarting web service..."
+    systemctl restart forpost-stream-web 2>/dev/null || systemctl start forpost-stream-web
     
-    if systemctl is-active --quiet forpost-stream-web 2>/dev/null; then
-        WEB_WAS_ACTIVE=true
-    fi
-    if systemctl is-active --quiet forpost-stream 2>/dev/null; then
-        STREAM_WAS_ACTIVE=true
-    fi
-    if systemctl is-active --quiet forpost-stream-watchdog.timer 2>/dev/null; then
-        WATCHDOG_WAS_ACTIVE=true
-    fi
-    
-    # Enable all services (this may stop some services)
-    enable_services
-    
-    # Restart services that were active before update
-    if [ "$WEB_WAS_ACTIVE" = "true" ]; then
-        echo "Restarting web service..."
-        systemctl restart forpost-stream-web
+    # Use handle_config_change.sh to manage stream service state
+    # It will:
+    # - Apply autostart setting from config (enable/disable)
+    # - Restart stream only if it's currently running
+    # - Handle UDP proxy if needed
+    if [ -f "$SCRIPT_DIR/scripts/handle_config_change.sh" ]; then
+        echo "Applying configuration settings..."
+        # Force re-apply all settings by removing snapshot
+        rm -f /tmp/forpost_config_snapshot.conf
+        bash "$SCRIPT_DIR/scripts/handle_config_change.sh"
     fi
     
-    if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
-        echo "Restarting stream service..."
-        systemctl start forpost-stream
-    fi
-    
-    if [ "$WATCHDOG_WAS_ACTIVE" = "true" ]; then
-        echo "Restarting watchdog timer..."
-        systemctl restart forpost-stream-watchdog.timer
-    fi
-    
-    echo "Services restarted according to their previous state"
+    echo "Update complete - services configured according to settings"
 else
     echo "Fresh installation - starting services normally..."
     enable_services
