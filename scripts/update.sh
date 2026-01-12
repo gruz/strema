@@ -213,6 +213,12 @@ if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
     echo "✅ Stream service restarted"
 fi
 
+# Always restart web service to apply interface updates
+echo ""
+echo "Restarting web service..."
+systemctl start forpost-stream-web
+echo "✅ Web service restarted"
+
 # Cleanup download directory
 cd /
 rm -rf "$TMP_DOWNLOAD"
