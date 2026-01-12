@@ -405,7 +405,7 @@
                         <div>
                             <strong>Поточна версія:</strong> <span id="currentVersion">...</span>
                         </div>
-                        <div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
                             <label style="font-weight: normal; margin: 0;">
                                 Канал:
                                 <select id="updateChannel" style="width: auto; padding: 4px 8px; margin-left: 8px;">
@@ -413,6 +413,9 @@
                                     <option value="beta">Beta</option>
                                 </select>
                             </label>
+                            <button class="btn btn-secondary" onclick="forceCheckUpdates()" style="padding: 4px 12px; font-size: 12px;">
+                                🔄 Оновити зараз
+                            </button>
                         </div>
                     </div>
 
@@ -1529,10 +1532,11 @@ VIDEO_CRF=30"></textarea>
                 });
         });
 
-        function checkUpdates() {
+        function checkUpdates(force = false) {
             const channel = document.getElementById('updateChannel').value;
+            const forceParam = force ? '&force=1' : '';
 
-            fetch(`/api/updates/check?channel=${channel}`)
+            fetch(`/api/updates/check?channel=${channel}${forceParam}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
@@ -1606,6 +1610,10 @@ VIDEO_CRF=30"></textarea>
                     console.error('Failed to check updates:', err);
                 });
         }
+        function forceCheckUpdates() {
+            checkUpdates(true);
+        }
+        
         function installUpdate(version) {
             if (!confirm(`Ви впевнені, що хочете оновити до версії ${version}?`)) {
                 return;

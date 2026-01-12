@@ -377,10 +377,16 @@ def check_updates():
     """Check for available updates from GitHub."""
     try:
         channel = request.args.get('channel', 'stable')
+        force = request.args.get('force', '')
         script_path = PROJECT_ROOT / 'scripts' / 'check_updates.sh'
         
+        # Build command arguments
+        args = ['bash', str(script_path), channel]
+        if force:
+            args.append('force')
+        
         result = subprocess.run(
-            ['bash', str(script_path), channel],
+            args,
             capture_output=True,
             text=True,
             timeout=30

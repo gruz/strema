@@ -1,9 +1,13 @@
 #!/bin/bash
 # Check for available updates from GitHub releases
 # Returns JSON with available versions
+# Usage: check_updates.sh [channel] [force]
+#   channel: stable (default) or beta
+#   force: any value to force refresh cache
 
 GITHUB_REPO="gruz/strema"
 CHANNEL="${1:-stable}"
+FORCE_REFRESH="${2}"
 
 # Determine installation directory
 if [ -n "$SUDO_USER" ]; then
@@ -12,6 +16,24 @@ else
     ORIGINAL_HOME="$HOME"
 fi
 INSTALL_DIR="$ORIGINAL_HOME/strema"
+
+# Cache configuration
+CACHE_DIR="$INSTALL_DIR/.cache"
+CACHE_FILE="$CACHE_DIR/updates_${CHANNEL}.json"
+CACHE_TTL=3600  # 1 hour in seconds
+
+# Create cache directory if it doesn't exist
+mkdir -p "$CACHE_DIR"
+
+# Check if cache is valid
+if [ -z "$FORCE_REFRESH" ] && [ -f "$CACHE_FILE" ]; then
+    CACHE_AGE=$(($(date +%s) - $(stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0)))
+    if [ "$CACHE_AGE" -lt "$CACHE_TTL" ]; then
+        # Cache is still valid, return cached data
+        cat "$CACHE_FILE"
+        exit 0
+    fi
+fi
 
 # Get current version
 CURRENT_VERSION="unknown"
@@ -90,8 +112,8 @@ if [ -n "$LATEST" ] && [ "$LATEST" != "v$CURRENT_VERSION" ]; then
     HAS_UPDATE=true
 fi
 
-# Output JSON
-cat << EOF
+# Build output JSON
+OUTPUT=$(cat << EOF
 {
     "current": "$CURRENT_VERSION",
     "latest": "${LATEST#v}",
@@ -100,3 +122,10 @@ cat << EOF
     "releases": $COMBINED_RELEASES
 }
 EOF
+)
+
+# Save to cache
+echo "$OUTPUT" > "$CACHE_FILE"
+
+# Output result
+echo "$OUTPUT"
