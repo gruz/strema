@@ -234,31 +234,46 @@ echo "[6/7] Enabling services..."
 if [ "$IS_UPDATE" = "true" ]; then
     echo "Update mode - restarting running services..."
     
-    # Restart services that are already running to apply new code
+    # Save state of services before enable_services modifies them
+    WEB_WAS_ACTIVE=false
+    STREAM_WAS_ACTIVE=false
+    WATCHDOG_WAS_ACTIVE=false
+    
     if systemctl is-active --quiet forpost-stream-web 2>/dev/null; then
+        WEB_WAS_ACTIVE=true
+    fi
+    if systemctl is-active --quiet forpost-stream 2>/dev/null; then
+        STREAM_WAS_ACTIVE=true
+    fi
+    if systemctl is-active --quiet forpost-stream-watchdog.timer 2>/dev/null; then
+        WATCHDOG_WAS_ACTIVE=true
+    fi
+    
+    # Enable all services (this may stop some services)
+    enable_services
+    
+    # Restart services that were active before update
+    if [ "$WEB_WAS_ACTIVE" = "true" ]; then
         echo "Restarting web service..."
         systemctl restart forpost-stream-web
-    else
-        echo "Starting web service..."
-        systemctl start forpost-stream-web
     fi
-
-    if systemctl is-active --quiet forpost-stream 2>/dev/null; then
+    
+    if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
         echo "Restarting stream service..."
-        systemctl restart forpost-stream
+        systemctl start forpost-stream
     fi
-
-    if systemctl is-active --quiet forpost-stream-watchdog.timer 2>/dev/null; then
+    
+    if [ "$WATCHDOG_WAS_ACTIVE" = "true" ]; then
         echo "Restarting watchdog timer..."
         systemctl restart forpost-stream-watchdog.timer
     fi
+    
+    echo "Services restarted according to their previous state"
 else
     echo "Fresh installation - starting services normally..."
+    enable_services
+    echo "All services enabled and started"
 fi
-
-# Enable all services
-enable_services
-echo "All services enabled and started"
 
 echo ""
 echo "=========================================="
