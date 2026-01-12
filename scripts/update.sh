@@ -1,6 +1,7 @@
 #!/bin/bash
 # Simplified update script for Forpost Stream
 # Uses uninstall + install approach for simplicity and reliability
+# Supports both master branch updates and release updates
 
 set -e
 
@@ -28,8 +29,10 @@ else
 fi
 
 if [ -z "$REQUESTED_VERSION" ]; then
-    echo "Usage: $0 <version>"
+    echo "Usage: $0 <version|latest|master>"
     echo "Example: $0 v0.1.1"
+    echo "         $0 latest"
+    echo "         $0 master"
     exit 1
 fi
 
@@ -80,35 +83,61 @@ fi
 
 # Download new version
 echo ""
-echo "Downloading version $REQUESTED_VERSION..."
-ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$REQUESTED_VERSION/strema-$REQUESTED_VERSION.tar.gz"
-CHECKSUM_URL="https://github.com/$GITHUB_REPO/releases/download/$REQUESTED_VERSION/checksums.txt"
-
 TMP_DOWNLOAD=$(mktemp -d)
 cd "$TMP_DOWNLOAD"
 
-if ! curl -fsSL -o "strema-$REQUESTED_VERSION.tar.gz" "$ARCHIVE_URL"; then
-    echo "❌ Error: Failed to download release archive"
-    exit 1
-fi
-
-# Verify checksum
-echo "Verifying checksum..."
-if curl -fsSL -o checksums.txt "$CHECKSUM_URL" 2>/dev/null; then
-    if sha256sum -c checksums.txt 2>/dev/null | grep -q "strema-$REQUESTED_VERSION.tar.gz: OK"; then
-        echo "✅ Checksum verified"
-    else
-        echo "❌ Error: Checksum verification failed"
+# Determine download source based on requested version
+if [ "$REQUESTED_VERSION" = "latest" ] || [ "$REQUESTED_VERSION" = "master" ]; then
+    # Download from master branch
+    echo "Downloading latest version from master branch..."
+    BRANCH="master"
+    ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/$BRANCH.tar.gz"
+    
+    if ! curl -fsSL -o "strema-master.tar.gz" "$ARCHIVE_URL"; then
+        echo "❌ Error: Failed to download from master branch"
         exit 1
     fi
+    
+    echo "Extracting archive..."
+    tar -xzf "strema-master.tar.gz"
+    
+    # GitHub creates folder named repo-branch
+    if [ -d "strema-master" ]; then
+        mv strema-master strema
+    fi
+    
+    NEW_VERSION_DIR="$TMP_DOWNLOAD/strema"
+    echo "✅ Downloaded latest code from master"
 else
-    echo "⚠️  Warning: Could not download checksums, skipping verification"
+    # Download specific release version
+    echo "Downloading release version $REQUESTED_VERSION..."
+    ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$REQUESTED_VERSION/strema-$REQUESTED_VERSION.tar.gz"
+    CHECKSUM_URL="https://github.com/$GITHUB_REPO/releases/download/$REQUESTED_VERSION/checksums.txt"
+    
+    if ! curl -fsSL -o "strema-$REQUESTED_VERSION.tar.gz" "$ARCHIVE_URL"; then
+        echo "❌ Error: Failed to download release archive"
+        echo "   Make sure release $REQUESTED_VERSION exists on GitHub"
+        exit 1
+    fi
+    
+    # Verify checksum
+    echo "Verifying checksum..."
+    if curl -fsSL -o checksums.txt "$CHECKSUM_URL" 2>/dev/null; then
+        if sha256sum -c checksums.txt 2>/dev/null | grep -q "strema-$REQUESTED_VERSION.tar.gz: OK"; then
+            echo "✅ Checksum verified"
+        else
+            echo "❌ Error: Checksum verification failed"
+            exit 1
+        fi
+    else
+        echo "⚠️  Warning: Could not download checksums, skipping verification"
+    fi
+    
+    # Extract to temporary location
+    echo "Extracting archive..."
+    tar -xzf "strema-$REQUESTED_VERSION.tar.gz"
+    NEW_VERSION_DIR="$TMP_DOWNLOAD/strema"
 fi
-
-# Extract to temporary location
-echo "Extracting archive..."
-tar -xzf "strema-$REQUESTED_VERSION.tar.gz"
-NEW_VERSION_DIR="$TMP_DOWNLOAD/strema"
 
 # Uninstall old version
 echo ""

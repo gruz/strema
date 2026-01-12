@@ -418,7 +418,7 @@
 
                     <div id="updateAvailable"
                         style="display: none; background: #d4edda; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-                        <strong style="color: #155724;">✨ Доступне оновлення: <span id="latestVersion"></span></strong>
+                        <strong style="color: #155724;">✨ Доступне оновлення до релізу: <span id="latestVersion"></span></strong>
                     </div>
 
                     <div id="updatesList"></div>
@@ -1560,21 +1560,33 @@ VIDEO_CRF=30"></textarea>
 
                     if (data.releases && data.releases.length > 0) {
                         data.releases.forEach(release => {
-                            const isCurrent = release.version === `v${data.current}`;
+                            // Check if this is the current version
+                            // For master, compare directly; for releases, compare with 'v' prefix
+                            const isCurrent = (release.version === 'master' && data.current === 'master') ||
+                                            (release.version === `v${data.current}`) ||
+                                            (release.version === data.current);
+                            
                             const releaseDiv = document.createElement('div');
                             releaseDiv.style.cssText = 'border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 12px;';
 
                             let badge = '';
                             if (isCurrent) {
                                 badge = '<span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">ПОТОЧНА</span>';
+                            } else if (release.version === 'master') {
+                                badge = '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">LATEST</span>';
                             } else if (release.prerelease) {
                                 badge = '<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">BETA</span>';
                             }
 
+                            // Special styling for master branch
+                            const titleText = release.version === 'master' ? 
+                                `<strong style="color: #28a745;">${release.name || release.version}</strong>` : 
+                                `<strong>${release.version}</strong>`;
+
                             releaseDiv.innerHTML = `
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <div>
-                                        <strong>${release.version}</strong>
+                                        ${titleText}
                                         ${badge}
                                     </div>
                                     <div>
