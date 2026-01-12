@@ -4,8 +4,8 @@
 #
 # Usage:
 #   Local install (from git clone):  sudo ./install.sh
-#   Remote install (without git):    curl -fsSL https://raw.githubusercontent.com/gruz/strema/main/install.sh | sudo bash
-#   Specific version:                curl -fsSL https://raw.githubusercontent.com/gruz/strema/main/install.sh | sudo bash -s v0.1.0
+#   Remote install (without git):    curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash
+#   Specific version:                curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.0
 
 set -e
 
@@ -41,68 +41,94 @@ else
     echo "🌐 Remote installation - downloading from GitHub"
     LOCAL_INSTALL=false
     
-    # Determine version to install
-    if [ "$REQUESTED_VERSION" = "latest" ]; then
-        echo "Fetching latest stable release..."
-        RELEASE_INFO=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest")
-        VERSION=$(echo "$RELEASE_INFO" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    else
-        VERSION="$REQUESTED_VERSION"
-    fi
-    
-    if [ -z "$VERSION" ]; then
-        echo "❌ Error: Could not determine version to install"
-        exit 1
-    fi
-    
-    echo "📦 Installing version: $VERSION"
-    
-    # Download release archive
-    ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION.tar.gz"
-    CHECKSUM_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/checksums.txt"
-    
-    echo "Downloading $ARCHIVE_URL..."
-    TMP_DIR=$(mktemp -d)
-    cd "$TMP_DIR"
-    
-    if ! curl -fsSL -o "strema-$VERSION.tar.gz" "$ARCHIVE_URL"; then
-        echo "❌ Error: Failed to download release archive"
-        rm -rf "$TMP_DIR"
-        exit 1
-    fi
-    
-    # Verify checksum
-    echo "Verifying checksum..."
-    if curl -fsSL -o checksums.txt "$CHECKSUM_URL" 2>/dev/null; then
-        if sha256sum -c checksums.txt 2>/dev/null | grep -q "strema-$VERSION.tar.gz: OK"; then
-            echo "✅ Checksum verified"
-        else
-            echo "⚠️  Warning: Checksum verification failed, but continuing..."
-        fi
-    else
-        echo "⚠️  Warning: Could not download checksums, skipping verification"
-    fi
-    
-    # Extract archive
-    echo "Extracting archive..."
-    tar -xzf "strema-$VERSION.tar.gz"
-    
-    # Move to installation directory
+    # Backup existing config if present
     if [ -d "$INSTALL_DIR" ]; then
         echo "⚠️  Installation directory exists, backing up config..."
+        TMP_BACKUP=$(mktemp -d)
         if [ -f "$INSTALL_DIR/config/stream.conf" ]; then
-            cp "$INSTALL_DIR/config/stream.conf" "$TMP_DIR/stream.conf.backup"
+            cp "$INSTALL_DIR/config/stream.conf" "$TMP_BACKUP/stream.conf.backup"
         fi
-        rm -rf "$INSTALL_DIR"
     fi
     
-    mkdir -p "$(dirname "$INSTALL_DIR")"
-    mv strema "$INSTALL_DIR"
+    # Determine installation source
+    if [ "$REQUESTED_VERSION" = "latest" ]; then
+        # Install from master branch (latest development version)
+        echo "📦 Installing latest version from master branch..."
+        BRANCH="master"
+        ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/$BRANCH.tar.gz"
+        
+        TMP_DIR=$(mktemp -d)
+        cd "$TMP_DIR"
+        
+        echo "Downloading $ARCHIVE_URL..."
+        if ! curl -fsSL -o "strema-master.tar.gz" "$ARCHIVE_URL"; then
+            echo "❌ Error: Failed to download from master branch"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+        
+        # Extract archive (GitHub creates a folder named repo-branch)
+        echo "Extracting archive..."
+        tar -xzf "strema-master.tar.gz"
+        
+        # Move to installation directory
+        if [ -d "$INSTALL_DIR" ]; then
+            rm -rf "$INSTALL_DIR"
+        fi
+        
+        mkdir -p "$(dirname "$INSTALL_DIR")"
+        mv strema-$BRANCH "$INSTALL_DIR"
+        
+    else
+        # Install specific release version
+        VERSION="$REQUESTED_VERSION"
+        echo "📦 Installing release version: $VERSION"
+        
+        # Download release archive
+        ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION.tar.gz"
+        CHECKSUM_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/checksums.txt"
+        
+        TMP_DIR=$(mktemp -d)
+        cd "$TMP_DIR"
+        
+        echo "Downloading $ARCHIVE_URL..."
+        if ! curl -fsSL -o "strema-$VERSION.tar.gz" "$ARCHIVE_URL"; then
+            echo "❌ Error: Failed to download release archive"
+            echo "   Make sure release $VERSION exists on GitHub"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+        
+        # Verify checksum
+        echo "Verifying checksum..."
+        if curl -fsSL -o checksums.txt "$CHECKSUM_URL" 2>/dev/null; then
+            if sha256sum -c checksums.txt 2>/dev/null | grep -q "strema-$VERSION.tar.gz: OK"; then
+                echo "✅ Checksum verified"
+            else
+                echo "⚠️  Warning: Checksum verification failed, but continuing..."
+            fi
+        else
+            echo "⚠️  Warning: Could not download checksums, skipping verification"
+        fi
+        
+        # Extract archive
+        echo "Extracting archive..."
+        tar -xzf "strema-$VERSION.tar.gz"
+        
+        # Move to installation directory
+        if [ -d "$INSTALL_DIR" ]; then
+            rm -rf "$INSTALL_DIR"
+        fi
+        
+        mkdir -p "$(dirname "$INSTALL_DIR")"
+        mv strema "$INSTALL_DIR"
+    fi
     
     # Restore config if backed up
-    if [ -f "$TMP_DIR/stream.conf.backup" ]; then
+    if [ -n "$TMP_BACKUP" ] && [ -f "$TMP_BACKUP/stream.conf.backup" ]; then
         echo "Restoring configuration..."
-        cp "$TMP_DIR/stream.conf.backup" "$INSTALL_DIR/config/stream.conf"
+        cp "$TMP_BACKUP/stream.conf.backup" "$INSTALL_DIR/config/stream.conf"
+        rm -rf "$TMP_BACKUP"
     fi
     
     # Cleanup

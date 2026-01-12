@@ -57,12 +57,12 @@ git push origin v0.2.0-beta.1
 
 **Остання stable версія:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gruz/strema/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash
 ```
 
 **Конкретна версія:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gruz/strema/main/install.sh | sudo bash -s v0.1.0
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.0
 ```
 
 ### Встановлення для розробників (з git)
@@ -132,7 +132,7 @@ sudo ~/strema/scripts/update.sh v0.1.0
 
 3. У крайньому випадку - переінсталюйте:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gruz/strema/main/install.sh | sudo bash -s v0.1.0
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.0
 ```
 
 ### Перевірка поточної версії
