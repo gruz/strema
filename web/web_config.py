@@ -426,21 +426,32 @@ def install_update():
         if not version:
             return jsonify({'error': 'Version is required'}), 400
         
+        # Determine real user (owner of project directory)
+        import pwd
+        stat_info = os.stat(PROJECT_ROOT)
+        real_user = pwd.getpwuid(stat_info.st_uid).pw_name
+        
         # Download and run install.sh directly (same as remote installation)
-        # Running from project parent directory ensures correct SUDO_USER detection
         install_script = 'https://raw.githubusercontent.com/gruz/strema/master/install.sh'
         
-        # Run update in background to avoid blocking web server
-        subprocess.Popen(
-            ['/bin/bash', '-c', f'curl -fsSL {install_script} | bash -s {version}'],
-            cwd=PROJECT_ROOT.parent,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
+        # Create log file for debugging
+        log_file = PROJECT_ROOT / 'logs' / 'web_update.log'
+        
+        # Run update as real user with sudo, in background with delay
+        # Delay allows web server to respond before being stopped
+        cmd = f'sleep 3 && sudo -u {real_user} bash -c "curl -fsSL {install_script} | bash -s {version}"'
+        
+        with open(log_file, 'w') as log:
+            subprocess.Popen(
+                ['/bin/bash', '-c', cmd],
+                cwd=PROJECT_ROOT.parent,
+                stdout=log,
+                stderr=subprocess.STDOUT
+            )
                 
         return jsonify({
             'success': True,
-            'message': f'Update to {version} started. Please wait...'
+            'message': f'Update to {version} started. Check logs/web_update.log for details.'
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
