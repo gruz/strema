@@ -430,10 +430,12 @@ def install_update():
         # Running from project parent directory ensures correct SUDO_USER detection
         install_script = 'https://raw.githubusercontent.com/gruz/strema/master/install.sh'
         
-        subprocess.run(
+        # Run update in background to avoid blocking web server
+        subprocess.Popen(
             ['/bin/bash', '-c', f'curl -fsSL {install_script} | sudo bash -s {version}'],
-            check=True,
-            cwd=PROJECT_ROOT.parent
+            cwd=PROJECT_ROOT.parent,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
         )
                 
         return jsonify({
