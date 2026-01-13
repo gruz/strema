@@ -48,9 +48,24 @@ if [ "$(sudo systemctl is-active forpost-udp-proxy 2>/dev/null)" = "active" ]; t
     echo "📝 UDP proxy is running - will restart after update"
 fi
 
-sudo systemctl stop 'forpost-*' 2>/dev/null || true
-sudo systemctl disable 'forpost-*' 2>/dev/null || true
-sudo rm -f /etc/systemd/system/forpost-*
+# Stop all services except web interface (to allow online updates to complete)
+for service in forpost-stream forpost-udp-proxy forpost-stream-autorestart.timer \
+               forpost-stream-config.path forpost-stream-watchdog.timer \
+               forpost-dzyga-monitor.timer forpost-power-settings; do
+    sudo systemctl stop "$service" 2>/dev/null || true
+    sudo systemctl disable "$service" 2>/dev/null || true
+done
+
+# Remove old service files (web will be updated but not stopped)
+for service_file in /etc/systemd/system/forpost-*.service /etc/systemd/system/forpost-*.timer /etc/systemd/system/forpost-*.path; do
+    [ -f "$service_file" ] || continue
+    service_name=$(basename "$service_file")
+    # Skip web service to allow online update to complete
+    if [ "$service_name" != "forpost-stream-web.service" ]; then
+        sudo rm -f "$service_file"
+    fi
+done
+
 sudo systemctl daemon-reload
 
 # Now analyze what we have and what to do
