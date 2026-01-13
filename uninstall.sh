@@ -10,12 +10,16 @@ fi
 
 echo "Removing Forpost Stream services..."
 
-# Source service manager for centralized service handling
-if [ ! -f "$SCRIPT_DIR/scripts/service_manager.sh" ] && [ -f "$SCRIPT_DIR/scripts/service_manager.sh.template" ]; then
-    cp "$SCRIPT_DIR/scripts/service_manager.sh.template" "$SCRIPT_DIR/scripts/service_manager.sh"
-fi
-source "$SCRIPT_DIR/scripts/service_manager.sh"
-cleanup_old_services "$SCRIPT_DIR"
-uninstall_all_services "$SCRIPT_DIR"
+# Stop and remove all forpost-* services
+echo "Stopping services..."
+systemctl stop 'forpost-*' 2>/dev/null || true
 
-echo "Forpost Stream services removed."
+echo "Disabling services..."
+systemctl disable 'forpost-*' 2>/dev/null || true
+
+echo "Removing service files..."
+rm -f /etc/systemd/system/forpost-*
+
+systemctl daemon-reload
+
+echo "✅ Forpost Stream services removed."
