@@ -12,6 +12,8 @@ set -e
 GITHUB_REPO="gruz/strema"
 VERSION="${1:-latest}"
 [ -z "$VERSION" ] && VERSION="latest"
+# Treat 'master' as 'latest' for compatibility
+[ "$VERSION" = "master" ] && VERSION="latest"
 
 echo "=========================================="
 echo "Installing Forpost Stream"
