@@ -38,9 +38,14 @@ fi
 echo ""
 echo "[1/5] Stopping and removing old services..."
 STREAM_WAS_ACTIVE=false
+UDP_PROXY_WAS_ACTIVE=false
 if [ "$(sudo systemctl is-active forpost-stream 2>/dev/null)" = "active" ]; then
     STREAM_WAS_ACTIVE=true
     echo "📝 Stream service is running - will restart after update"
+fi
+if [ "$(sudo systemctl is-active forpost-udp-proxy 2>/dev/null)" = "active" ]; then
+    UDP_PROXY_WAS_ACTIVE=true
+    echo "📝 UDP proxy is running - will restart after update"
 fi
 
 sudo systemctl stop 'forpost-*' 2>/dev/null || true
@@ -252,7 +257,18 @@ sudo systemctl disable forpost-stream 2>/dev/null || true
 sudo systemctl disable forpost-udp-proxy 2>/dev/null || true
 sudo systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
 
-# Restart stream if it was running before update
+# Apply configuration settings (autostart, auto-restart, etc.)
+if [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
+    echo "Applying configuration settings..."
+    bash "$SCRIPT_DIR/scripts/handle_config_change.sh" 2>/dev/null || true
+fi
+
+# Restart services if they were running before update
+if [ "$UDP_PROXY_WAS_ACTIVE" = "true" ]; then
+    echo "Restarting UDP proxy service..."
+    sudo systemctl start forpost-udp-proxy
+fi
+
 if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
     echo "Restarting stream service..."
     sudo systemctl start forpost-stream
