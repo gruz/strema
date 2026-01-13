@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash /home/rpidrone/strema/scripts/monitor_dzyga_serial.sh
+ExecStart=/bin/bash __INSTALL_DIR__/scripts/monitor_dzyga_serial.sh
 StandardOutput=journal
 StandardError=journal
 

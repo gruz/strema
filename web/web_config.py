@@ -429,7 +429,7 @@ def install_update():
         # Use systemd-run to run update in isolated context
         subprocess.run(
             ['sudo', 'systemd-run', '--unit=forpost-stream-update', '--no-block',
-             '/bin/bash', str(PROJECT_ROOT / 'scripts' / 'update.sh'), version],
+             '/bin/bash', str(PROJECT_ROOT / 'update.sh'), version],
             check=True
         )
         

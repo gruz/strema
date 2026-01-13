@@ -2,8 +2,15 @@
 # Monitor dzyga.log for serial port connection issues
 # If "No data > 2s" appears too frequently in recent logs, restart dzyga service
 
-LOG_FILE="/home/rpidrone/FORPOST/dzyga.log"
-MONITOR_LOG="/home/rpidrone/strema/logs/dzyga_monitor.log"
+# Determine user home directory
+if [ -n "$SUDO_USER" ]; then
+    USER_HOME=$(eval echo ~$SUDO_USER)
+else
+    USER_HOME="$HOME"
+fi
+
+LOG_FILE="$USER_HOME/FORPOST/dzyga.log"
+MONITOR_LOG="$USER_HOME/strema/logs/dzyga_monitor.log"
 THRESHOLD=10
 TIME_WINDOW=120
 
@@ -16,7 +23,7 @@ if [ ! -f "$LOG_FILE" ]; then
     exit 1
 fi
 
-DZYGA_PID=$(pgrep -f "/home/rpidrone/FORPOST/dzyga$" | tail -1)
+DZYGA_PID=$(pgrep -f "$USER_HOME/FORPOST/dzyga$" | tail -1)
 if [ -z "$DZYGA_PID" ]; then
     log "WARNING: dzyga process not running"
     exit 0

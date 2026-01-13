@@ -48,7 +48,7 @@ sudo ./install.sh
 
 ### Через CLI
 ```bash
-sudo /home/rpidrone/strema/scripts/update.sh v0.1.1
+cd ~/strema && sudo ./scripts/update.sh v0.1.1
 ```
 
 ---

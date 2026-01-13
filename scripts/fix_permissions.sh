@@ -13,7 +13,12 @@ fi
 echo "Fixing permissions for Forpost Stream..."
 
 # Determine the correct owner (user who owns the project directory)
-PROJECT_OWNER=$(stat -c '%U:%G' "$PROJECT_ROOT" 2>/dev/null || echo "rpidrone:rpidrone")
+if [ -n "$SUDO_USER" ]; then
+    FALLBACK_OWNER="$SUDO_USER:$SUDO_USER"
+else
+    FALLBACK_OWNER="$(whoami):$(whoami)"
+fi
+PROJECT_OWNER=$(stat -c '%U:%G' "$PROJECT_ROOT" 2>/dev/null || echo "$FALLBACK_OWNER")
 
 echo "Project owner: $PROJECT_OWNER"
 echo "Project root: $PROJECT_ROOT"

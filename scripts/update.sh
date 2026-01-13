@@ -9,9 +9,7 @@ GITHUB_REPO="gruz/strema"
 REQUESTED_VERSION="$1"
 
 # Determine installation directory
-if [ -d "/home/rpidrone/strema" ]; then
-    INSTALL_DIR="/home/rpidrone/strema"
-elif [ -n "$SUDO_USER" ]; then
+if [ -n "$SUDO_USER" ]; then
     ORIGINAL_HOME=$(eval echo ~$SUDO_USER)
     INSTALL_DIR="$ORIGINAL_HOME/strema"
 else
