@@ -109,7 +109,7 @@ sudo ./install.sh
 ### Через CLI
 
 ```bash
-sudo ~/strema/scripts/update.sh v0.1.1
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.1
 ```
 
 ### Перевірка доступних оновлень
@@ -151,7 +151,7 @@ sudo journalctl -u forpost-stream-web -n 50
 
 2. Спробуйте оновити вручну:
 ```bash
-sudo ~/strema/scripts/update.sh v0.1.0
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.0
 ```
 
 3. У крайньому випадку - переінсталюйте:

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Centralized service management for Forpost Stream
-# This file is sourced by install.sh, uninstall.sh, update.sh
+# This file is sourced by install.sh and uninstall.sh
 
 # Services that should be auto-started during installation
 AUTO_START_SERVICES=(

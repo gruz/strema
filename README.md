@@ -48,7 +48,7 @@ sudo ./install.sh
 
 ### Через CLI
 ```bash
-cd ~/strema && sudo ./scripts/update.sh v0.1.1
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.1
 ```
 
 ---

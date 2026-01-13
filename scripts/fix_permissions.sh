@@ -31,7 +31,6 @@ chown -R "$PROJECT_OWNER" "$PROJECT_ROOT"
 echo "Setting executable permissions on scripts..."
 chmod +x "$PROJECT_ROOT/scripts/"*.sh
 chmod +x "$PROJECT_ROOT/web/web_config.py"
-chmod +x "$PROJECT_ROOT/update.sh" 2>/dev/null || true
 
 # Fix permissions for config and logs (readable/writable)
 echo "Setting permissions on config and logs..."
