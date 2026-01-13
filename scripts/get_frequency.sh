@@ -11,15 +11,9 @@ if ! flock -n 200; then
     exit 1
 fi
 
-# Determine user home directory
-if [ -n "$SUDO_USER" ]; then
-    USER_HOME=$(eval echo ~$SUDO_USER)
-else
-    USER_HOME="$HOME"
-fi
-
 # Find dzyga process PID (not dzyga_web)
-DZYGA_PID=$(pgrep -f "$USER_HOME/FORPOST/dzyga$" | tail -1)
+# Match any path ending with /FORPOST/dzyga (not dzyga_web)
+DZYGA_PID=$(pgrep -f "/FORPOST/dzyga$" | tail -1)
 
 if [ -z "$DZYGA_PID" ]; then
     echo "ERROR: dzyga process not found" >&2
