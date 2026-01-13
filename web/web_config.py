@@ -426,23 +426,16 @@ def install_update():
         if not version:
             return jsonify({'error': 'Version is required'}), 400
         
-        # Detect original installation user from project directory ownership
-        # This ensures update installs to the same location as original installation
-        import pwd
-        stat_info = PROJECT_ROOT.stat()
-        original_user = pwd.getpwuid(stat_info.st_uid).pw_name
-        
         # Download and run install.sh directly (same as remote installation)
-        # Set SUDO_USER to original installation user to preserve installation directory
+        # Running from project parent directory ensures correct SUDO_USER detection
         install_script = 'https://raw.githubusercontent.com/gruz/strema/master/install.sh'
         
         subprocess.run(
-            ['sudo', 'systemd-run', '--unit=forpost-stream-update', '--no-block',
-             '--setenv=SUDO_USER=' + original_user,
-             '/bin/bash', '-c', f'curl -fsSL {install_script} | bash -s {version}'],
-            check=True
+            ['/bin/bash', '-c', f'curl -fsSL {install_script} | sudo bash -s {version}'],
+            check=True,
+            cwd=PROJECT_ROOT.parent
         )
-        
+                
         return jsonify({
             'success': True,
             'message': f'Update to {version} started. Please wait...'
