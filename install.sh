@@ -4,8 +4,8 @@
 #
 # Usage:
 #   Local install (from git clone):  sudo ./install.sh
-#   Remote install (without git):    curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash
-#   Specific version:                curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.0
+#   Remote install (without git):    curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash
+#   Specific version:                curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash -s v0.1.0
 
 set -e
 

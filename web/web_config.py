@@ -432,7 +432,7 @@ def install_update():
         
         # Run update in background to avoid blocking web server
         subprocess.Popen(
-            ['/bin/bash', '-c', f'curl -fsSL {install_script} | sudo bash -s {version}'],
+            ['/bin/bash', '-c', f'curl -fsSL {install_script} | bash -s {version}'],
             cwd=PROJECT_ROOT.parent,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL

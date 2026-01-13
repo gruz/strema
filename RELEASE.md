@@ -81,12 +81,12 @@ git push origin v0.2.0-beta.1
 
 **Остання stable версія:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash
 ```
 
 **Конкретна версія:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.0
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash -s v0.1.0
 ```
 
 ### Встановлення для розробників (з git)
@@ -109,7 +109,7 @@ sudo ./install.sh
 ### Через CLI
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.1
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash -s v0.1.1
 ```
 
 ### Перевірка доступних оновлень
@@ -151,12 +151,12 @@ sudo journalctl -u forpost-stream-web -n 50
 
 2. Спробуйте оновити вручну:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.0
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash -s v0.1.0
 ```
 
 3. У крайньому випадку - переінсталюйте:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | sudo bash -s v0.1.0
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash -s v0.1.0
 ```
 
 ### Перевірка поточної версії
