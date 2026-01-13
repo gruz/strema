@@ -304,7 +304,7 @@ def restart_service():
 def restart_dzyga():
     """API endpoint to restart the Dzyga monitor service."""
     try:
-        result = os.system('sudo systemctl restart forpost-dzyga-monitor.service')
+        result = os.system('sudo systemctl restart dzyga.service')
         if result == 0:
             return jsonify({'success': True, 'message': 'Dzyga сервіс успішно перезапущено'})
         else:
