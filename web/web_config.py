@@ -102,10 +102,10 @@ def save_config(config_data):
     """Save configuration to file."""
     # Create config file with defaults if it doesn't exist
     if not CONFIG_FILE.exists():
-        defaults = parse_defaults()
-        with open(CONFIG_FILE, 'w') as f:
-            for key, value in defaults.items():
-                f.write(f"{key}={value}\n")
+        if not DEFAULTS_FILE.exists():
+            raise FileNotFoundError(f"Defaults file not found: {DEFAULTS_FILE}")
+        with open(DEFAULTS_FILE, 'r') as src, open(CONFIG_FILE, 'w') as dst:
+            dst.write(src.read())
         # Set ownership to original user (not root)
         try:
             import pwd
