@@ -16,3 +16,5 @@ scripts/service_manager.sh
 
 __pycache__
 .cache
+
+code_core.txt
