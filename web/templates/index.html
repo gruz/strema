@@ -376,10 +376,10 @@
             <h1>🎥 FORPOST Stream</h1>
             <p>{{ header_title }} <span style="color: #999; font-size: 12px;">v{{ version }}</span>
                 {% if firmware_serial %}
-                <span style="color: #999; font-size: 12px; margin-left: 12px;">S/N: 
+                <span style="color: #999; font-size: 12px; margin-left: 12px;">ID: 
                     <em style="border:1px solid #ccc; padding:2px">{{ firmware_serial }}</em>
                     <button onclick="var t=document.createElement('textarea');t.value='{{ firmware_serial }}';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);this.textContent='✅';var b=this;setTimeout(function(){b.textContent='📋'},1500)"
-                        style="border:none;background:none;cursor:pointer;font-size:12px;padding:2px 4px;" title="Копіювати S/N">📋</button>
+                        style="border:none;background:none;cursor:pointer;font-size:12px;padding:2px 4px;" title="Копіювати ID">📋</button>
                 </span>
                 {% endif %}
             </p>
@@ -1033,6 +1033,33 @@ VIDEO_CRF=30"></textarea>
 
             <div id="dzygaRestartStatus"
                 style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
+        </div>        
+        
+        <div class="card">
+            <div class="section-title"
+                style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+                onclick="toggleFirmwareHelpSection()">
+                <span>📖 Довідка: оновлення Dzyga</span>
+                <span id="firmwareHelpToggleIcon" style="font-size: 20px;">▼</span>
+            </div>
+
+            <div id="firmwareHelpContent" style="display: none; margin-top: 12px; font-size: 14px; line-height: 1.6;">
+                <p>Програмне забезпечення <strong>Dzyga Forpost</strong> складається з компонентів виробника та сторонніх розширень спільноти. <strong>FORPOST Stream</strong> (ця сторінка) — стороннє розширення для стрімінгу відео в Дельту.</p>
+
+                <p>Два блоки нижче призначені для оновлення компонентів <strong>самого пристрою Dzyga</strong>, наданих виробником. Це зручна обгортка, що зменшує кількість ручних операцій.</p>
+
+                <div style="background: #fff3cd; padding: 10px 14px; border-radius: 8px; margin: 12px 0; border-left: 4px solid #ffc107;">
+                    <strong>Важливо:</strong> оновлення FORPOST Stream і оновлення Dzyga — це <strong>незалежні процеси</strong>.
+                </div>
+
+                <p>Пристрій Dzyga має два програмних компоненти:</p>
+
+                <div style="margin-left: 8px;">
+                    <p><strong>1. Сервіс Dzyga</strong> (бінарний файл) — керує роботою пристрою через серійний порт: передає частоти, зчитує поточний стан, симулює екран керування. <strong>Файл однаковий для всіх пристроїв</strong> — його можна отримати у виробника та завантажити у відповідному блоці нижче.</p>
+
+                    <p><strong>2. Прошивка мікроконтролера</strong> (файл .uf2) — відповідає за логіку обробки сигналу: перетворення прийнятого сигналу у відео, зупинку на частоті з активним відео, пропуск порожніх частот тощо. <strong>Файл прив'язаний до конкретного пристрою.</strong> Для отримання прошивки повідомте виробнику ID пристрою, який вказано в шапці цієї сторінки.</p>
+                </div>
+            </div>
         </div>
 
         <!-- Dzyga Binary Management -->
@@ -2515,6 +2542,20 @@ VIDEO_CRF=30"></textarea>
                 });
         }
 
+        // --- Firmware Help Section ---
+
+        function toggleFirmwareHelpSection() {
+            var content = document.getElementById('firmwareHelpContent');
+            var icon = document.getElementById('firmwareHelpToggleIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+
         // --- Firmware (RP2040) Management ---
 
         function toggleFirmwareSection() {
@@ -2540,7 +2581,7 @@ VIDEO_CRF=30"></textarea>
                         return;
                     }
                     details.innerHTML =
-                        '<div>S/N: <strong><code>' + (data.serial || 'невідомо') + '</code></strong></div>' +
+                        '<div>ID: <strong><code>' + (data.serial || 'невідомо') + '</code></strong></div>' +
                         '<div>Пристрій: <strong>' + (data.device_present ? '✅ /dev/rp2040 підключено' : '❌ /dev/rp2040 не знайдено') + '</strong></div>';
                 })
                 .catch(function (err) {
