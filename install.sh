@@ -293,6 +293,9 @@ if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
     sudo systemctl start forpost-stream
 fi
 
+# Restart web service to pick up new code
+sudo systemctl restart forpost-stream-web
+
 echo "✅ Services configured"
 
 # Show info
