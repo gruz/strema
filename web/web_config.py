@@ -166,11 +166,25 @@ def index():
     config, comments = parse_config()
     config_exists = CONFIG_FILE.exists()
     version = get_version()
+
+    # Get firmware serial
+    firmware_serial = ''
+    try:
+        get_core_path = Path(__file__).resolve().parent.parent / 'scripts' / 'get_core'
+        result = subprocess.run([str(get_core_path)],
+                                capture_output=True, text=True, timeout=5)
+        if result.returncode == 0 and result.stdout.strip():
+            firmware_serial = result.stdout.strip()
+    except:
+        pass
+
     if (not config_exists) or (not is_config_ready(config)):
         return render_template('installer.html', config=config, version=version, 
-                             header_title="Конфігурація відеопотоку", show_cpu_mode=True)
+                             header_title="Конфігурація відеопотоку", show_cpu_mode=True,
+                             firmware_serial=firmware_serial)
     return render_template('index.html', config=config, comments=comments, version=version,
-                         header_title="Конфігурація відеопотоку", show_cpu_mode=True)
+                         header_title="Конфігурація відеопотоку", show_cpu_mode=True,
+                         firmware_serial=firmware_serial)
 
 
 @app.route('/api/installer', methods=['POST'])

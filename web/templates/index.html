@@ -374,7 +374,13 @@
     <div class="container">
         <div class="header">
             <h1>🎥 FORPOST Stream</h1>
-            <p>{{ header_title }} <span style="color: #999; font-size: 12px;">v{{ version }}</span></p>
+            <p>{{ header_title }} <span style="color: #999; font-size: 12px;">v{{ version }}</span>
+                {% if firmware_serial %}
+                <span style="color: #999; font-size: 12px; margin-left: 12px;">S/N: 
+                    <em style="border:1px solid #ccc; padding:2px">{{ firmware_serial }}</em>
+                </span>
+                {% endif %}
+            </p>
             <div>
                 <span id="statusBadge"></span>
                 {% if show_cpu_mode %}
