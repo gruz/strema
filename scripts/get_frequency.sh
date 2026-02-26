@@ -1,7 +1,45 @@
 #!/bin/bash
-# Reads current frequency from DZYGA packets via strace
-# Packet: 0xFF 0xAA + 2 bytes frequency
-# Does not interrupt client operation
+# Reads current frequency from dzyga
+# New dzyga versions write frequency to a file directly.
+# Old dzyga (md5 e67a77bbb35d5f7a6136e1f6b79d4aa4) requires strace sniffing.
+
+OLD_DZYGA_MD5="e67a77bbb35d5f7a6136e1f6b79d4aa4"
+MD5_CACHE="/tmp/dzyga.md5"
+FREQ_FILE="/tmp/dzyga_freq_current.txt"
+
+# Determine which dzyga version is running.
+# If no cache file, compute MD5 once and write it.
+DZYGA_BINARY="/home/rpidrone/FORPOST/dzyga"
+
+if [ ! -f "$MD5_CACHE" ]; then
+    if [ -f "$DZYGA_BINARY" ]; then
+        md5sum "$DZYGA_BINARY" | awk '{print $1}' > "$MD5_CACHE"
+    fi
+fi
+
+USE_LEGACY=false
+if [ -f "$MD5_CACHE" ]; then
+    CURRENT_MD5=$(cat "$MD5_CACHE" | tr -d '[:space:]')
+    if [ "$CURRENT_MD5" = "$OLD_DZYGA_MD5" ]; then
+        USE_LEGACY=true
+    fi
+else
+    # No binary and no cache — assume old version for safety
+    USE_LEGACY=true
+fi
+
+# --- New logic: read frequency from file written by dzyga ---
+if [ "$USE_LEGACY" = false ]; then
+    if [ -f "$FREQ_FILE" ]; then
+        cat "$FREQ_FILE"
+        exit 0
+    fi
+
+    echo "ERROR: Frequency file not found" >&2
+    exit 1
+fi
+
+# --- Legacy logic: sniff frequency via strace (old dzyga only) ---
 
 # Use flock to prevent parallel strace calls (only one strace can attach to process at a time)
 LOCK_FILE="/tmp/get_frequency.lock"

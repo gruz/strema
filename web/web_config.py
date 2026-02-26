@@ -676,6 +676,7 @@ def restore_from_backup(backup_num):
 
 DZYGA_BINARY = Path('/home/rpidrone/FORPOST/dzyga')
 DZYGA_BACKUP_DIR = Path('/home/rpidrone/FORPOST/backups')
+DZYGA_MD5_FILE = Path('/tmp/dzyga.md5')
 DZYGA_SERVICE = 'dzyga.service'
 
 
@@ -686,6 +687,15 @@ def _file_md5(filepath):
         for chunk in iter(lambda: f.read(8192), b''):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _invalidate_dzyga_md5_cache():
+    """Remove dzyga MD5 cache so get_frequency.sh recalculates it on next call."""
+    try:
+        subprocess.run(['sudo', 'rm', '-f', str(DZYGA_MD5_FILE)],
+                       capture_output=True, text=True, timeout=5)
+    except:
+        pass
 
 
 def _dzyga_service_cmd(action):
@@ -810,6 +820,9 @@ def dzyga_upload():
             subprocess.run(['sudo', 'chmod', oct(orig_mode)[-3:], str(DZYGA_BINARY)],
                            capture_output=True, text=True, timeout=10)
 
+            # Invalidate MD5 cache
+            _invalidate_dzyga_md5_cache()
+
             # daemon-reload and start
             _dzyga_service_cmd('daemon-reload')
             _dzyga_service_cmd('start')
@@ -882,6 +895,9 @@ def dzyga_restore():
                        capture_output=True, text=True, timeout=10)
         subprocess.run(['sudo', 'chmod', oct(orig_mode)[-3:], str(DZYGA_BINARY)],
                        capture_output=True, text=True, timeout=10)
+
+        # Invalidate MD5 cache
+        _invalidate_dzyga_md5_cache()
 
         # daemon-reload and start
         _dzyga_service_cmd('daemon-reload')

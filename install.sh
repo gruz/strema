@@ -238,6 +238,8 @@ mkdir -p "$SCRIPT_DIR/logs"
 
 # Clean up old temporary files from previous versions (migration)
 sudo rm -f /tmp/dzyga_* 2>/dev/null || true
+# Remove dzyga MD5 cache so get_frequency.sh recalculates it on first call
+rm -f /tmp/dzyga.md5 2>/dev/null || true
 
 echo "✅ Files ready"
 
