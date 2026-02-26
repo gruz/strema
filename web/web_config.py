@@ -6,6 +6,7 @@ import hashlib
 import shutil
 import datetime
 import tempfile
+import time
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from pathlib import Path
 
@@ -943,7 +944,7 @@ def dzyga_delete_backup():
             return jsonify({'success': False, 'error': 'Не вказано файл бекапу'}), 400
 
         if '/' in backup_filename or '..' in backup_filename:
-            return jsonify({'success': False, 'error': 'Некоректне ім\'я файлу'}), 400
+            return jsonify({'success': False, 'error': 'Некоректне ім\'я файла'}), 400
 
         backup_path = DZYGA_BACKUP_DIR / backup_filename
         if not backup_path.exists():
@@ -952,6 +953,135 @@ def dzyga_delete_backup():
         backup_path.unlink()
         return jsonify({'success': True, 'message': f'Бекап {backup_filename} видалено'})
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# --- Firmware (RP2040) management ---
+
+FIRMWARE_MOUNT_POINT = Path('/mnt/rpi')
+RP2040_DEVICE = '/dev/rp2040'
+RP2040_DISK = '/dev/sda1'
+
+
+@app.route('/api/firmware/info', methods=['GET'])
+def firmware_info():
+    """Get current firmware serial from get_core."""
+    try:
+        info = {}
+        # Firmware serial
+        try:
+            get_core_path = Path(__file__).resolve().parent.parent / 'scripts' / 'get_core'
+            result = subprocess.run([str(get_core_path)],
+                                    capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                info['serial'] = result.stdout.strip()
+        except:
+            info['serial'] = ''
+
+        # Check if RP2040 device exists
+        info['device_present'] = Path(RP2040_DEVICE).exists()
+
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/firmware/flash', methods=['POST'])
+def firmware_flash():
+    """Upload and flash a .uf2 firmware file to RP2040."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'Файл не надіслано'}), 400
+
+        file = request.files['file']
+        if not file.filename:
+            return jsonify({'success': False, 'error': 'Файл не вибрано'}), 400
+
+        if not file.filename.lower().endswith('.uf2'):
+            return jsonify({'success': False, 'error': 'Дозволені лише .uf2 файли'}), 400
+
+        # Save uploaded file to temp location
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.uf2')
+        try:
+            file.save(tmp.name)
+            tmp.close()
+
+            # 1. Stop dzyga service
+            subprocess.run(['sudo', 'systemctl', 'stop', 'dzyga.service'],
+                           capture_output=True, text=True, timeout=30)
+
+            # 2. Send 1200 baud to RP2040 to enter bootloader mode
+            result = subprocess.run(['sudo', 'stty', '-F', RP2040_DEVICE, '1200'],
+                                    capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                subprocess.run(['sudo', 'systemctl', 'start', 'dzyga.service'],
+                               capture_output=True, text=True, timeout=30)
+                return jsonify({'success': False, 'error': f'Не вдалося переключити RP2040 в режим завантаження: {result.stderr}'}), 500
+
+            # 3. Wait for /dev/sda1 to appear (RP2040 USB mass storage)
+            disk_found = False
+            for _ in range(30):  # wait up to 15 seconds
+                time.sleep(0.5)
+                if Path(RP2040_DISK).exists():
+                    disk_found = True
+                    break
+
+            if not disk_found:
+                subprocess.run(['sudo', 'systemctl', 'start', 'dzyga.service'],
+                               capture_output=True, text=True, timeout=30)
+                return jsonify({'success': False, 'error': f'RP2040 диск {RP2040_DISK} не з\'явився протягом 15 секунд'}), 500
+
+            # 4. Mount the RP2040 disk
+            subprocess.run(['sudo', 'mkdir', '-p', str(FIRMWARE_MOUNT_POINT)],
+                           capture_output=True, text=True, timeout=5)
+            result = subprocess.run(['sudo', 'mount', RP2040_DISK, str(FIRMWARE_MOUNT_POINT)],
+                                    capture_output=True, text=True, timeout=10)
+            if result.returncode != 0:
+                subprocess.run(['sudo', 'systemctl', 'start', 'dzyga.service'],
+                               capture_output=True, text=True, timeout=30)
+                return jsonify({'success': False, 'error': f'Не вдалося змонтувати диск: {result.stderr}'}), 500
+
+            # 5. Copy firmware file
+            result = subprocess.run(['sudo', 'cp', tmp.name, str(FIRMWARE_MOUNT_POINT / file.filename)],
+                                    capture_output=True, text=True, timeout=30)
+
+            # 6. Unmount (may fail if RP2040 reboots quickly, that's OK)
+            subprocess.run(['sudo', 'umount', str(FIRMWARE_MOUNT_POINT)],
+                           capture_output=True, text=True, timeout=10)
+
+            if result.returncode != 0:
+                subprocess.run(['sudo', 'systemctl', 'start', 'dzyga.service'],
+                               capture_output=True, text=True, timeout=30)
+                return jsonify({'success': False, 'error': f'Не вдалося скопіювати прошивку: {result.stderr}'}), 500
+
+            # 7. Wait for RP2040 to reboot and reappear
+            time.sleep(3)
+
+            # 8. Restart dzyga service
+            subprocess.run(['sudo', 'systemctl', 'start', 'dzyga.service'],
+                           capture_output=True, text=True, timeout=30)
+
+            # 9. Invalidate MD5 cache (dzyga may behave differently with new firmware)
+            _invalidate_dzyga_md5_cache()
+
+            return jsonify({
+                'success': True,
+                'message': f'Прошивку {file.filename} успішно завантажено'
+            })
+
+        finally:
+            # Clean up temp file
+            try:
+                os.unlink(tmp.name)
+            except:
+                pass
+
+    except Exception as e:
+        try:
+            subprocess.run(['sudo', 'systemctl', 'start', 'dzyga.service'],
+                           capture_output=True, text=True, timeout=30)
+        except:
+            pass
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

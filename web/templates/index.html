@@ -1086,6 +1086,58 @@ VIDEO_CRF=30"></textarea>
             </div>
         </div>
 
+        <!-- Firmware Flash -->
+        <div class="card">
+            <div class="section-title"
+                style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+                onclick="toggleFirmwareSection()">
+                <span>🔌 Прошивка мікроконтролера (RP2040)</span>
+                <span id="firmwareToggleIcon" style="font-size: 20px;">▼</span>
+            </div>
+
+            <div id="firmwareContent" style="display: none; margin-top: 12px;">
+                <!-- Current firmware info -->
+                <div id="firmwareInfo"
+                    style="background: #d1ecf1; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #17a2b2;">
+                    <strong style="color: #0c5460;">📊 Поточна прошивка:</strong>
+                    <div style="margin-top: 8px; font-size: 13px; color: #0c5460;" id="firmwareDetails">
+                        Завантаження...
+                    </div>
+                </div>
+
+                <div
+                    style="background: #f8d7da; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #dc3545;">
+                    <strong style="color: #721c24;">⚠️ Увага:</strong>
+                    <span style="color: #721c24;"> Прошивка мікроконтролера — незворотна операція. Переконайтесь, що файл .uf2 правильний.</span>
+                </div>
+
+                <!-- Upload form -->
+                <div class="form-group">
+                    <label>Завантажити файл прошивки (.uf2):</label>
+                    <input type="file" id="firmwareFileInput" accept=".uf2"
+                        style="width: 100%; padding: 12px; border: 2px dashed #e0e0e0; border-radius: 8px; font-size: 14px; cursor: pointer; background: #f8f9fa;">
+                </div>
+
+                <div class="button-group" style="margin-top: 12px;">
+                    <button type="button" class="btn btn-primary" id="firmwareFlashBtn" disabled
+                        style="background: #dc3545;">
+                        🔌 Прошити мікроконтролер
+                    </button>
+                </div>
+
+                <div id="firmwareProgress" style="display: none; margin-top: 12px;">
+                    <div style="background: #e9ecef; border-radius: 8px; overflow: hidden; height: 24px;">
+                        <div id="firmwareProgressBar"
+                            style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600;">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="firmwareStatus"
+                    style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -2462,6 +2514,158 @@ VIDEO_CRF=30"></textarea>
                     showDzygaStatus('❌ Помилка: ' + err.message, 'error');
                 });
         }
+
+        // --- Firmware (RP2040) Management ---
+
+        function toggleFirmwareSection() {
+            var content = document.getElementById('firmwareContent');
+            var icon = document.getElementById('firmwareToggleIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+                loadFirmwareInfo();
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+
+        function loadFirmwareInfo() {
+            var details = document.getElementById('firmwareDetails');
+            fetch('/api/firmware/info')
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.error) {
+                        details.innerHTML = '<span style="color: #721c24;">Помилка: ' + data.error + '</span>';
+                        return;
+                    }
+                    details.innerHTML =
+                        '<div>S/N: <strong><code>' + (data.serial || 'невідомо') + '</code></strong></div>' +
+                        '<div>Пристрій: <strong>' + (data.device_present ? '✅ /dev/rp2040 підключено' : '❌ /dev/rp2040 не знайдено') + '</strong></div>';
+                })
+                .catch(function (err) {
+                    details.innerHTML = '<span style="color: #721c24;">Помилка: ' + err.message + '</span>';
+                });
+        }
+
+        function showFirmwareStatus(message, type) {
+            var statusDiv = document.getElementById('firmwareStatus');
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = message;
+            if (type === 'success') {
+                statusDiv.style.background = '#d4edda';
+                statusDiv.style.color = '#155724';
+            } else if (type === 'error') {
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+            } else {
+                statusDiv.style.background = '#fff3cd';
+                statusDiv.style.color = '#856404';
+            }
+        }
+
+        document.getElementById('firmwareFileInput').addEventListener('change', function () {
+            var btn = document.getElementById('firmwareFlashBtn');
+            btn.disabled = !this.files.length;
+        });
+
+        var firmwareSteps = [
+            { pct: 10, text: '📤 Завантаження файл...', delay: 0 },
+            { pct: 20, text: '🛑 Зупинка dzyga сервіса...', delay: 1500 },
+            { pct: 30, text: '🔌 Перемикання RP2040 в режим завантаження...', delay: 3000 },
+            { pct: 45, text: '⏳ Очікування появи USB диска...', delay: 5000 },
+            { pct: 55, text: '⏳ Очікування появи USB диска...', delay: 8000 },
+            { pct: 65, text: '💾 Монтування диска...', delay: 11000 },
+            { pct: 75, text: '📝 Копіювання прошивки...', delay: 13000 },
+            { pct: 85, text: '🔄 Перезавантаження мікроконтролера...', delay: 16000 },
+            { pct: 92, text: '⏳ Очікування /dev/rp2040...', delay: 19000 },
+            { pct: 96, text: '🚀 Запуск dzyga сервіса...', delay: 22000 }
+        ];
+        var firmwareStepTimers = [];
+
+        document.getElementById('firmwareFlashBtn').addEventListener('click', function () {
+            var fileInput = document.getElementById('firmwareFileInput');
+            if (!fileInput.files.length) return;
+
+            var file = fileInput.files[0];
+            if (!file.name.toLowerCase().endsWith('.uf2')) {
+                showFirmwareStatus('❌ Дозволені лише .uf2 файли', 'error');
+                return;
+            }
+
+            if (!confirm('Прошити мікроконтролер файлом:\n\n' + file.name + '\n\nЦя операція незворотна. Продовжити?')) {
+                return;
+            }
+
+            var btn = this;
+            btn.disabled = true;
+            var originalText = btn.textContent;
+            btn.textContent = '⏳ Прошивка...';
+
+            var progressDiv = document.getElementById('firmwareProgress');
+            var progressBar = document.getElementById('firmwareProgressBar');
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressBar.textContent = '';
+
+            showFirmwareStatus('⏳ Підготовка до прошивки...', 'info');
+
+            // Start step animation
+            firmwareStepTimers.forEach(function (t) { clearTimeout(t); });
+            firmwareStepTimers = [];
+            firmwareSteps.forEach(function (step) {
+                var t = setTimeout(function () {
+                    progressBar.style.width = step.pct + '%';
+                    progressBar.textContent = step.pct + '%';
+                    showFirmwareStatus(step.text, 'info');
+                }, step.delay);
+                firmwareStepTimers.push(t);
+            });
+
+            var formData = new FormData();
+            formData.append('file', file);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/firmware/flash', true);
+
+            xhr.onload = function () {
+                firmwareStepTimers.forEach(function (t) { clearTimeout(t); });
+                progressBar.style.width = '100%';
+                progressBar.textContent = '100%';
+
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        showFirmwareStatus('✅ ' + data.message, 'success');
+                    } else {
+                        showFirmwareStatus('❌ ' + (data.error || 'Помилка прошивки'), 'error');
+                    }
+                } catch (e) {
+                    showFirmwareStatus('❌ Помилка обробки відповіді', 'error');
+                }
+
+                btn.disabled = true;
+                btn.textContent = originalText;
+                fileInput.value = '';
+            };
+
+            xhr.onerror = function () {
+                firmwareStepTimers.forEach(function (t) { clearTimeout(t); });
+                showFirmwareStatus('❌ Помилка з\'єднання', 'error');
+                btn.disabled = false;
+                btn.textContent = originalText;
+            };
+
+            xhr.ontimeout = function () {
+                firmwareStepTimers.forEach(function (t) { clearTimeout(t); });
+                showFirmwareStatus('❌ Таймаут з\'єднання', 'error');
+                btn.disabled = false;
+                btn.textContent = originalText;
+            };
+
+            xhr.timeout = 120000;
+            xhr.send(formData);
+        });
     </script>
 </body>
 
