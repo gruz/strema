@@ -2,10 +2,15 @@
 import os
 import re
 import subprocess
+import hashlib
+import shutil
+import datetime
+import tempfile
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from pathlib import Path
 
 app = Flask(__name__, static_folder='static')
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB max upload
 
 SCRIPT_DIR = Path(__file__).parent.absolute()
 PROJECT_ROOT = SCRIPT_DIR.parent
@@ -666,6 +671,259 @@ def restore_from_backup(backup_num):
         return jsonify({'success': True, 'message': f'Configuration restored from backup {backup_num}'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# --- Dzyga binary management ---
+
+DZYGA_BINARY = Path('/home/rpidrone/FORPOST/dzyga')
+DZYGA_BACKUP_DIR = Path('/home/rpidrone/FORPOST/backups')
+DZYGA_SERVICE = 'dzyga.service'
+
+
+def _file_md5(filepath):
+    """Calculate MD5 checksum of a file."""
+    h = hashlib.md5()
+    with open(filepath, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _dzyga_service_cmd(action):
+    """Run systemctl action on dzyga service. action: start|stop|daemon-reload."""
+    if action == 'daemon-reload':
+        return subprocess.run(['sudo', 'systemctl', 'daemon-reload'],
+                              capture_output=True, text=True, timeout=30)
+    return subprocess.run(['sudo', 'systemctl', action, DZYGA_SERVICE],
+                          capture_output=True, text=True, timeout=30)
+
+
+@app.route('/api/dzyga/info', methods=['GET'])
+def dzyga_info():
+    """Get info about current dzyga binary and available backups."""
+    try:
+        info = {'binary_exists': DZYGA_BINARY.exists()}
+
+        if DZYGA_BINARY.exists():
+            stat = DZYGA_BINARY.stat()
+            info['size'] = stat.st_size
+            info['modified'] = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            info['md5'] = _file_md5(DZYGA_BINARY)
+
+            # Get owner/group
+            import pwd, grp
+            try:
+                info['owner'] = pwd.getpwuid(stat.st_uid).pw_name
+                info['group'] = grp.getgrgid(stat.st_gid).gr_name
+            except:
+                info['owner'] = str(stat.st_uid)
+                info['group'] = str(stat.st_gid)
+            info['mode'] = oct(stat.st_mode)[-3:]
+
+        # List backups
+        backups = []
+        if DZYGA_BACKUP_DIR.exists():
+            for f in sorted(DZYGA_BACKUP_DIR.glob('dzyga.backup.*'), reverse=True):
+                fstat = f.stat()
+                backups.append({
+                    'filename': f.name,
+                    'size': fstat.st_size,
+                    'modified': datetime.datetime.fromtimestamp(fstat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+                })
+        info['backups'] = backups
+
+        # Service status
+        try:
+            result = subprocess.run(['systemctl', 'is-active', DZYGA_SERVICE],
+                                    capture_output=True, text=True)
+            info['service_status'] = result.stdout.strip()
+        except:
+            info['service_status'] = 'unknown'
+
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dzyga/upload', methods=['POST'])
+def dzyga_upload():
+    """Upload a new dzyga binary. Backs up old one, preserves permissions."""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'Файл не надано'}), 400
+
+        uploaded = request.files['file']
+        if uploaded.filename == '':
+            return jsonify({'success': False, 'error': 'Файл не обрано'}), 400
+
+        # Save uploaded file to a temp location first
+        tmp_fd, tmp_path = tempfile.mkstemp(prefix='dzyga_upload_')
+        try:
+            uploaded.save(tmp_path)
+            os.close(tmp_fd)
+
+            new_md5 = _file_md5(tmp_path)
+            new_size = os.path.getsize(tmp_path)
+
+            # Ensure backup directory exists
+            DZYGA_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Backup current binary if it exists
+            backup_name = None
+            if DZYGA_BINARY.exists():
+                old_md5 = _file_md5(DZYGA_BINARY)
+                old_mtime = datetime.datetime.fromtimestamp(DZYGA_BINARY.stat().st_mtime).strftime('%Y%m%d_%H%M%S')
+                backup_name = f'dzyga.backup.{old_mtime}.md5_{old_md5}'
+                backup_path = DZYGA_BACKUP_DIR / backup_name
+
+                # Copy with metadata preserved
+                shutil.copy2(str(DZYGA_BINARY), str(backup_path))
+
+            # Remember original permissions/ownership
+            if DZYGA_BINARY.exists():
+                orig_stat = DZYGA_BINARY.stat()
+                orig_uid = orig_stat.st_uid
+                orig_gid = orig_stat.st_gid
+                orig_mode = orig_stat.st_mode
+            else:
+                # Default: rpidrone:rpidrone, rwxr-x--x
+                import pwd, grp
+                orig_uid = pwd.getpwnam('rpidrone').pw_uid
+                orig_gid = grp.getgrnam('rpidrone').gr_gid
+                orig_mode = 0o751
+
+            # Stop dzyga service
+            _dzyga_service_cmd('stop')
+
+            # Replace binary using sudo cp to handle permission issues
+            result = subprocess.run(
+                ['sudo', 'cp', tmp_path, str(DZYGA_BINARY)],
+                capture_output=True, text=True, timeout=30
+            )
+            if result.returncode != 0:
+                # Try to restart service even on failure
+                _dzyga_service_cmd('start')
+                return jsonify({'success': False, 'error': f'Не вдалося замінити файл: {result.stderr}'}), 500
+
+            # Restore ownership and permissions
+            subprocess.run(['sudo', 'chown', f'{orig_uid}:{orig_gid}', str(DZYGA_BINARY)],
+                           capture_output=True, text=True, timeout=10)
+            subprocess.run(['sudo', 'chmod', oct(orig_mode)[-3:], str(DZYGA_BINARY)],
+                           capture_output=True, text=True, timeout=10)
+
+            # daemon-reload and start
+            _dzyga_service_cmd('daemon-reload')
+            _dzyga_service_cmd('start')
+
+            return jsonify({
+                'success': True,
+                'message': 'Бінарний файл dzyga успішно оновлено',
+                'new_md5': new_md5,
+                'new_size': new_size,
+                'backup': backup_name
+            })
+        finally:
+            # Clean up temp file
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    except Exception as e:
+        # Try to restart service on any error
+        try:
+            _dzyga_service_cmd('start')
+        except:
+            pass
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dzyga/restore', methods=['POST'])
+def dzyga_restore():
+    """Restore dzyga binary from a backup."""
+    try:
+        data = request.json or {}
+        backup_filename = data.get('filename', '')
+
+        if not backup_filename:
+            return jsonify({'success': False, 'error': 'Не вказано файл бекапу'}), 400
+
+        # Sanitize filename to prevent path traversal
+        if '/' in backup_filename or '..' in backup_filename:
+            return jsonify({'success': False, 'error': 'Некоректне ім\'я файлу'}), 400
+
+        backup_path = DZYGA_BACKUP_DIR / backup_filename
+        if not backup_path.exists():
+            return jsonify({'success': False, 'error': 'Файл бекапу не знайдено'}), 404
+
+        # Remember original permissions/ownership of current binary
+        if DZYGA_BINARY.exists():
+            orig_stat = DZYGA_BINARY.stat()
+            orig_uid = orig_stat.st_uid
+            orig_gid = orig_stat.st_gid
+            orig_mode = orig_stat.st_mode
+        else:
+            import pwd
+            orig_uid = pwd.getpwnam('rpidrone').pw_uid
+            orig_gid = pwd.getpwnam('rpidrone').pw_gid
+            orig_mode = 0o751
+
+        # Stop dzyga service
+        _dzyga_service_cmd('stop')
+
+        # Replace binary
+        result = subprocess.run(
+            ['sudo', 'cp', str(backup_path), str(DZYGA_BINARY)],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            _dzyga_service_cmd('start')
+            return jsonify({'success': False, 'error': f'Не вдалося відновити файл: {result.stderr}'}), 500
+
+        # Restore ownership and permissions
+        subprocess.run(['sudo', 'chown', f'{orig_uid}:{orig_gid}', str(DZYGA_BINARY)],
+                       capture_output=True, text=True, timeout=10)
+        subprocess.run(['sudo', 'chmod', oct(orig_mode)[-3:], str(DZYGA_BINARY)],
+                       capture_output=True, text=True, timeout=10)
+
+        # daemon-reload and start
+        _dzyga_service_cmd('daemon-reload')
+        _dzyga_service_cmd('start')
+
+        restored_md5 = _file_md5(DZYGA_BINARY)
+
+        return jsonify({
+            'success': True,
+            'message': f'Бінарний файл dzyga відновлено з {backup_filename}',
+            'md5': restored_md5
+        })
+    except Exception as e:
+        try:
+            _dzyga_service_cmd('start')
+        except:
+            pass
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/dzyga/backup/delete', methods=['POST'])
+def dzyga_delete_backup():
+    """Delete a dzyga backup file."""
+    try:
+        data = request.json or {}
+        backup_filename = data.get('filename', '')
+
+        if not backup_filename:
+            return jsonify({'success': False, 'error': 'Не вказано файл бекапу'}), 400
+
+        if '/' in backup_filename or '..' in backup_filename:
+            return jsonify({'success': False, 'error': 'Некоректне ім\'я файлу'}), 400
+
+        backup_path = DZYGA_BACKUP_DIR / backup_filename
+        if not backup_path.exists():
+            return jsonify({'success': False, 'error': 'Файл бекапу не знайдено'}), 404
+
+        backup_path.unlink()
+        return jsonify({'success': True, 'message': f'Бекап {backup_filename} видалено'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8081, debug=False)

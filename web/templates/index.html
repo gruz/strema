@@ -1027,6 +1027,57 @@ VIDEO_CRF=30"></textarea>
                 style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
         </div>
 
+        <!-- Dzyga Binary Management -->
+        <div class="card">
+            <div class="section-title"
+                style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;"
+                onclick="toggleDzygaBinarySection()">
+                <span>📦 Оновлення бінарного файлу Dzyga</span>
+                <span id="dzygaBinaryToggleIcon" style="font-size: 20px;">▼</span>
+            </div>
+
+            <div id="dzygaBinaryContent" style="display: none; margin-top: 12px;">
+                <!-- Current binary info -->
+                <div id="dzygaBinaryInfo"
+                    style="background: #d1ecf1; padding: 12px; border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #17a2b2;">
+                    <strong style="color: #0c5460;">📊 Поточний бінарний файл:</strong>
+                    <div style="margin-top: 8px; font-size: 13px; color: #0c5460;" id="dzygaBinaryDetails">
+                        Завантаження...
+                    </div>
+                </div>
+
+                <!-- Upload form -->
+                <div class="form-group">
+                    <label>Завантажити новий бінарний файл dzyga:</label>
+                    <input type="file" id="dzygaFileInput"
+                        style="width: 100%; padding: 12px; border: 2px dashed #e0e0e0; border-radius: 8px; font-size: 14px; cursor: pointer; background: #f8f9fa;">
+                </div>
+
+                <div class="button-group" style="margin-top: 12px;">
+                    <button type="button" class="btn btn-primary" id="dzygaUploadBtn" disabled>
+                        📤 Завантажити та замінити
+                    </button>
+                </div>
+
+                <div id="dzygaUploadProgress" style="display: none; margin-top: 12px;">
+                    <div style="background: #e9ecef; border-radius: 8px; overflow: hidden; height: 24px;">
+                        <div id="dzygaProgressBar"
+                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600;">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="dzygaUploadStatus"
+                    style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
+
+                <!-- Backups list -->
+                <div id="dzygaBackupsSection" style="margin-top: 20px; display: none;">
+                    <div class="section-title" style="font-size: 15px;">📦 Резервні копії бінарного файлу</div>
+                    <div id="dzygaBackupsList"></div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -2173,6 +2224,235 @@ VIDEO_CRF=30"></textarea>
                     this.selectionStart = this.selectionEnd = start + 4;
                 }
             });
+        }
+        // --- Dzyga Binary Management ---
+
+        function toggleDzygaBinarySection() {
+            const content = document.getElementById('dzygaBinaryContent');
+            const icon = document.getElementById('dzygaBinaryToggleIcon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+                loadDzygaBinaryInfo();
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function loadDzygaBinaryInfo() {
+            const details = document.getElementById('dzygaBinaryDetails');
+            fetch('/api/dzyga/info')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        details.innerHTML = '<span style="color: #721c24;">Помилка: ' + data.error + '</span>';
+                        return;
+                    }
+
+                    if (!data.binary_exists) {
+                        details.innerHTML = '<span style="color: #856404;">Бінарний файл не знайдено</span>';
+                    } else {
+                        details.innerHTML =
+                            '<div>Розмір: <strong>' + formatFileSize(data.size) + '</strong></div>' +
+                            '<div>MD5: <strong><code>' + data.md5 + '</code></strong></div>' +
+                            '<div>Змінено: <strong>' + data.modified + '</strong></div>' +
+                            '<div>Сервіс: <strong>' + (data.service_status || 'unknown') + '</strong></div>';
+                    }
+
+                    // Render backups
+                    const backupsSection = document.getElementById('dzygaBackupsSection');
+                    const backupsList = document.getElementById('dzygaBackupsList');
+
+                    if (data.backups && data.backups.length > 0) {
+                        backupsSection.style.display = 'block';
+                        backupsList.innerHTML = '';
+
+                        data.backups.forEach(function (backup) {
+                            const div = document.createElement('div');
+                            div.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; margin-bottom: 6px; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; flex-wrap: wrap; gap: 8px;';
+
+                            // Extract md5 from filename for display
+                            const md5Match = backup.filename.match(/md5_([a-f0-9]+)$/);
+                            const md5Short = md5Match ? md5Match[1].substring(0, 8) + '...' : '';
+
+                            div.innerHTML =
+                                '<div style="font-size: 12px; min-width: 200px;">' +
+                                    '<div><strong>' + backup.filename + '</strong></div>' +
+                                    '<div style="color: #666;">' + formatFileSize(backup.size) + ' | ' + backup.modified +
+                                    (md5Short ? ' | MD5: <code>' + md5Short + '</code>' : '') +
+                                    '</div>' +
+                                '</div>' +
+                                '<div style="display: flex; gap: 6px;">' +
+                                    '<button type="button" onclick="restoreDzygaBackup(\'' + backup.filename + '\')" ' +
+                                        'style="font-size: 12px; padding: 6px 12px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">' +
+                                        '🔄 Відновити</button>' +
+                                    '<button type="button" onclick="deleteDzygaBackup(\'' + backup.filename + '\')" ' +
+                                        'style="font-size: 12px; padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer;">' +
+                                        '🗑️ Видалити</button>' +
+                                '</div>';
+
+                            backupsList.appendChild(div);
+                        });
+                    } else {
+                        backupsSection.style.display = 'block';
+                        backupsList.innerHTML = '<span style="font-size: 13px; color: #666;">Резервних копій немає</span>';
+                    }
+                })
+                .catch(function (err) {
+                    details.innerHTML = '<span style="color: #721c24;">Помилка завантаження: ' + err.message + '</span>';
+                });
+        }
+
+        // Enable upload button when file is selected
+        document.getElementById('dzygaFileInput').addEventListener('change', function () {
+            document.getElementById('dzygaUploadBtn').disabled = !this.files.length;
+        });
+
+        // Upload dzyga binary
+        document.getElementById('dzygaUploadBtn').addEventListener('click', function () {
+            const fileInput = document.getElementById('dzygaFileInput');
+            if (!fileInput.files.length) return;
+
+            if (!confirm('⚠️ Це зупинить сервіс Dzyga, замінить бінарний файл і перезапустить сервіс.\n\nПоточний файл буде збережено як резервну копію.\n\nПродовжити?')) {
+                return;
+            }
+
+            const btn = this;
+            const statusDiv = document.getElementById('dzygaUploadStatus');
+            const progressDiv = document.getElementById('dzygaUploadProgress');
+            const progressBar = document.getElementById('dzygaProgressBar');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Завантаження...';
+            progressDiv.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressBar.textContent = '';
+            statusDiv.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/dzyga/upload');
+
+            xhr.upload.addEventListener('progress', function (e) {
+                if (e.lengthComputable) {
+                    const pct = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = pct + '%';
+                    progressBar.textContent = pct + '%';
+                }
+            });
+
+            xhr.addEventListener('load', function () {
+                progressBar.style.width = '100%';
+                progressBar.textContent = '100%';
+
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        showDzygaStatus('✅ ' + data.message +
+                            (data.backup ? ' (бекап: ' + data.backup + ')' : '') +
+                            ' | MD5: ' + data.new_md5, 'success');
+                        showAlert('✅ ' + data.message, 'success');
+                        fileInput.value = '';
+                        btn.disabled = true;
+                        loadDzygaBinaryInfo();
+                    } else {
+                        showDzygaStatus('❌ ' + (data.error || 'Невідома помилка'), 'error');
+                        showAlert('❌ ' + (data.error || 'Помилка завантаження'), 'error');
+                    }
+                } catch (e) {
+                    showDzygaStatus('❌ Помилка обробки відповіді сервера', 'error');
+                }
+
+                setTimeout(function () { progressDiv.style.display = 'none'; }, 3000);
+                btn.disabled = false;
+                btn.textContent = '📤 Завантажити та замінити';
+            });
+
+            xhr.addEventListener('error', function () {
+                showDzygaStatus('❌ Помилка з\'єднання з сервером', 'error');
+                progressDiv.style.display = 'none';
+                btn.disabled = false;
+                btn.textContent = '📤 Завантажити та замінити';
+            });
+
+            xhr.send(formData);
+        });
+
+        function showDzygaStatus(message, type) {
+            const statusDiv = document.getElementById('dzygaUploadStatus');
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            if (type === 'success') {
+                statusDiv.style.background = '#d4edda';
+                statusDiv.style.color = '#155724';
+                statusDiv.style.border = '1px solid #c3e6cb';
+            } else {
+                statusDiv.style.background = '#f8d7da';
+                statusDiv.style.color = '#721c24';
+                statusDiv.style.border = '1px solid #f5c6cb';
+            }
+            setTimeout(function () { statusDiv.style.display = 'none'; }, 15000);
+        }
+
+        function restoreDzygaBackup(filename) {
+            if (!confirm('⚠️ Відновити бінарний файл dzyga з бекапу?\n\n' + filename + '\n\nСервіс буде зупинено та перезапущено.')) {
+                return;
+            }
+
+            showDzygaStatus('⏳ Відновлення з бекапу...', 'success');
+
+            fetch('/api/dzyga/restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: filename })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        showDzygaStatus('✅ ' + data.message + ' | MD5: ' + data.md5, 'success');
+                        showAlert('✅ ' + data.message, 'success');
+                        loadDzygaBinaryInfo();
+                    } else {
+                        showDzygaStatus('❌ ' + (data.error || 'Помилка відновлення'), 'error');
+                        showAlert('❌ ' + (data.error || 'Помилка відновлення'), 'error');
+                    }
+                })
+                .catch(function (err) {
+                    showDzygaStatus('❌ Помилка: ' + err.message, 'error');
+                });
+        }
+
+        function deleteDzygaBackup(filename) {
+            if (!confirm('Видалити резервну копію?\n\n' + filename)) {
+                return;
+            }
+
+            fetch('/api/dzyga/backup/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: filename })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        showDzygaStatus('✅ ' + data.message, 'success');
+                        loadDzygaBinaryInfo();
+                    } else {
+                        showDzygaStatus('❌ ' + (data.error || 'Помилка видалення'), 'error');
+                    }
+                })
+                .catch(function (err) {
+                    showDzygaStatus('❌ Помилка: ' + err.message, 'error');
+                });
         }
     </script>
 </body>
