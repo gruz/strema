@@ -378,6 +378,8 @@
                 {% if firmware_serial %}
                 <span style="color: #999; font-size: 12px; margin-left: 12px;">S/N: 
                     <em style="border:1px solid #ccc; padding:2px">{{ firmware_serial }}</em>
+                    <button onclick="var t=document.createElement('textarea');t.value='{{ firmware_serial }}';document.body.appendChild(t);t.select();document.execCommand('copy');document.body.removeChild(t);this.textContent='✅';var b=this;setTimeout(function(){b.textContent='📋'},1500)"
+                        style="border:none;background:none;cursor:pointer;font-size:12px;padding:2px 4px;" title="Копіювати S/N">📋</button>
                 </span>
                 {% endif %}
             </p>
