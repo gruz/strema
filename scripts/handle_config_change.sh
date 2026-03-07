@@ -258,6 +258,7 @@ main() {
         echo "$new_config" > "$SNAPSHOT_FILE"
         log "Initial snapshot created, applying all settings"
         apply_power_settings
+        apply_autostart_setting
         update_autorestart_timer
         exit 0
     fi

@@ -277,6 +277,8 @@ sudo systemctl disable forpost-udp-proxy 2>/dev/null || true
 sudo systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
 
 # Apply configuration settings (autostart, auto-restart, etc.)
+# Remove snapshot so handle_config_change.sh re-applies all settings from config
+rm -f /tmp/forpost_config_snapshot.conf 2>/dev/null || true
 if [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
     echo "Applying configuration settings..."
     bash "$SCRIPT_DIR/scripts/handle_config_change.sh" 2>/dev/null || true
