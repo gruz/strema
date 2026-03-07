@@ -182,11 +182,18 @@ apply_autostart_setting() {
     
     log "Applying autostart setting..."
     
+    local use_udp=$(get_value "USE_UDP_PROXY" "$new_config")
+
     if [ "$autostart_enabled" = "true" ]; then
         if sudo systemctl enable forpost-stream 2>/dev/null; then
             log "Autostart enabled (systemctl enable forpost-stream)"
         else
             log "WARNING: Failed to enable autostart"
+        fi
+        # Enable UDP proxy on boot if used, so it starts before the stream
+        if [ "$use_udp" = "true" ]; then
+            sudo systemctl enable forpost-udp-proxy 2>/dev/null
+            log "UDP proxy autostart enabled"
         fi
     else
         if sudo systemctl disable forpost-stream 2>/dev/null; then
@@ -194,6 +201,8 @@ apply_autostart_setting() {
         else
             log "WARNING: Failed to disable autostart"
         fi
+        sudo systemctl disable forpost-udp-proxy 2>/dev/null
+        log "UDP proxy autostart disabled"
     fi
 }
 
