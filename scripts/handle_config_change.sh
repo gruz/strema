@@ -183,13 +183,13 @@ apply_autostart_setting() {
     log "Applying autostart setting..."
     
     if [ "$autostart_enabled" = "true" ]; then
-        if systemctl enable forpost-stream 2>/dev/null; then
+        if sudo systemctl enable forpost-stream 2>/dev/null; then
             log "Autostart enabled (systemctl enable forpost-stream)"
         else
             log "WARNING: Failed to enable autostart"
         fi
     else
-        if systemctl disable forpost-stream 2>/dev/null; then
+        if sudo systemctl disable forpost-stream 2>/dev/null; then
             log "Autostart disabled (systemctl disable forpost-stream)"
         else
             log "WARNING: Failed to disable autostart"
@@ -212,7 +212,7 @@ restart_stream() {
     log "Restarting stream service..."
     
     # Check if stream is actually running
-    if ! systemctl is-active --quiet forpost-stream; then
+    if ! sudo systemctl is-active --quiet forpost-stream; then
         log "Stream service is not active, skipping restart"
         return 0
     fi
@@ -222,11 +222,11 @@ restart_stream() {
     local use_udp=$(get_value "USE_UDP_PROXY" "$new_config")
     if [ "$use_udp" = "true" ]; then
         log "Restarting UDP proxy..."
-        systemctl restart forpost-udp-proxy 2>/dev/null || true
+        sudo systemctl restart forpost-udp-proxy 2>/dev/null || true
     fi
     
     # Restart stream
-    if systemctl restart forpost-stream; then
+    if sudo systemctl restart forpost-stream; then
         log "Stream service restarted successfully"
     else
         log "ERROR: Failed to restart stream service"

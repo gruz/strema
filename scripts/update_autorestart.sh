@@ -22,7 +22,7 @@ fi
 source "$CONFIG_FILE"
 
 # Update timer file with new interval
-cat > "$TIMER_FILE" << EOF
+sudo tee "$TIMER_FILE" > /dev/null << EOF
 [Unit]
 Description=FORPOST Stream Auto-Restart Timer
 Requires=forpost-stream.service
@@ -35,23 +35,23 @@ AccuracySec=1min
 WantedBy=timers.target
 EOF
 
-systemctl daemon-reload
+sudo systemctl daemon-reload
 
 # Enable or disable timer based on configuration
 if [ "$AUTO_RESTART_ENABLED" = "true" ]; then
     # Check if stream service is running before enabling timer
-    if systemctl is-active --quiet forpost-stream; then
-        systemctl enable forpost-stream-autorestart.timer
-        systemctl restart forpost-stream-autorestart.timer
+    if sudo systemctl is-active --quiet forpost-stream; then
+        sudo systemctl enable forpost-stream-autorestart.timer
+        sudo systemctl restart forpost-stream-autorestart.timer
         echo "Auto-restart enabled (every ${AUTO_RESTART_INTERVAL}h)"
     else
         # Only enable, don't start timer if stream is not running
-        systemctl enable forpost-stream-autorestart.timer
-        systemctl stop forpost-stream-autorestart.timer 2>/dev/null || true
+        sudo systemctl enable forpost-stream-autorestart.timer
+        sudo systemctl stop forpost-stream-autorestart.timer 2>/dev/null || true
         echo "Auto-restart enabled but not started (stream is not running)"
     fi
 else
-    systemctl stop forpost-stream-autorestart.timer 2>/dev/null || true
-    systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
+    sudo systemctl stop forpost-stream-autorestart.timer 2>/dev/null || true
+    sudo systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
     echo "Auto-restart disabled"
 fi
