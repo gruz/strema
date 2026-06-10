@@ -47,8 +47,6 @@ fi
 # Load configuration (overrides defaults)
 source "$CONFIG_FILE"
 
-# FFmpeg logging level is now loaded from defaults.conf
-
 # Initialize debug mode
 if [ "$DEBUG_MODE" = "true" ]; then
     if [ -f "$DEBUG_LOG_FILE" ] && [ $(stat -c%s "$DEBUG_LOG_FILE" 2>/dev/null) -gt $MAX_DEBUG_SIZE ]; then
@@ -59,8 +57,14 @@ fi
 
 # Auto-detect IP address if not set in config
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
-    FORPOST_IP=$(ip route get 1 | awk '{print $7; exit}')
-    log "Auto-detected IP: $FORPOST_IP"
+    FORPOST_IP=$(ip route get 1 2>/dev/null | awk '{print $7; exit}')
+    if [ -z "$FORPOST_IP" ]; then
+        # RTSP server runs locally, loopback works as fallback
+        FORPOST_IP="127.0.0.1"
+        log "WARNING: IP detection failed, falling back to $FORPOST_IP"
+    else
+        log "Auto-detected IP: $FORPOST_IP"
+    fi
 fi
 
 # Auto-detect RTSP transport using shared function
@@ -356,7 +360,7 @@ while true; do
             # libx264, constrained bitrate (maxrate capped), zerolatency, no B-frames, GOP = 2 * FPS.
             # Bufsize is 1.5x bitrate to improve motion quality without exceeding maxrate.
             if [ "$DEBUG_MODE" = "true" ]; then
-                ffmpeg -hide_banner -loglevel info -stats_period 5 \
+                ffmpeg -hide_banner -loglevel verbose -stats_period 5 \
                     $INPUT_PARAMS \
                     -vf "$VF_FILTER" \
                     -r ${VIDEO_FPS} \
@@ -367,7 +371,7 @@ while true; do
                     -an -f flv "$RTMP_URL" \
                     2>> "$DEBUG_RAW_FILE" &
             else
-                ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
+                ffmpeg -hide_banner \
                     $INPUT_PARAMS \
                     -vf "$VF_FILTER" \
                     -r ${VIDEO_FPS} \
@@ -375,19 +379,21 @@ while true; do
                     -bf 0 -pix_fmt yuv420p -sc_threshold 0 \
                     -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
                     -g ${VIDEO_GOP} \
-                    -an -f flv "$RTMP_URL" &
+                    -an -f flv "$RTMP_URL" \
+                    2>/dev/null &
             fi
         else
             # No overlay - just copy
             if [ "$DEBUG_MODE" = "true" ]; then
-                ffmpeg -hide_banner -loglevel info -stats_period 5 \
+                ffmpeg -hide_banner -loglevel verbose -stats_period 5 \
                     $INPUT_PARAMS \
                     -c:v copy -an -f flv "$RTMP_URL" \
                     2>> "$DEBUG_RAW_FILE" &
             else
-                ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
+                ffmpeg -hide_banner \
                     $INPUT_PARAMS \
-                    -c:v copy -an -f flv "$RTMP_URL" &
+                    -c:v copy -an -f flv "$RTMP_URL" \
+                    2>/dev/null &
             fi
         fi
         
@@ -401,10 +407,69 @@ while true; do
                 sleep 5
                 CPU_FFMPEG=$(top -b -n1 -p "$FFMPEG_PID" 2>/dev/null | tail -1 | awk '{print $9}' | cut -d. -f1)
                 LOAD_AVG=$(cut -d' ' -f1 /proc/loadavg)
-                PING_MS=$(ping -c 1 -W 2 "$RTMP_HOST_FOR_PING" 2>/dev/null | grep 'time=' | sed 's/.*time=\([0-9.]*\).*/\1/')
-                [ -z "$PING_MS" ] && PING_MS="timeout"
+
+                # CPU temperature
+                CPU_TEMP="N/A"
+                if command -v vcgencmd &>/dev/null; then
+                    CPU_TEMP=$(vcgencmd measure_temp 2>/dev/null | grep -o '[0-9.]*' | head -1)
+                elif [ -f /sys/class/thermal/thermal_zone0/temp ]; then
+                    CPU_TEMP=$(awk '{printf "%.1f", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null)
+                fi
+
+                # Free memory (MB)
+                MEM_FREE=$(free -m 2>/dev/null | awk '/^Mem:/ {print $7}')
+                [ -z "$MEM_FREE" ] && MEM_FREE="N/A"
+
+                # Power status (Raspberry Pi): undervoltage and throttling flags
+                # get_throttled bits: 0=undervoltage now, 1=freq capped now, 2=throttled now,
+                #                     16=undervoltage occurred, 17=freq capped occurred, 18=throttled occurred
+                PWR_STATUS="N/A"
+                CORE_VOLT="N/A"
+                if command -v vcgencmd &>/dev/null; then
+                    THROTTLED_HEX=$(vcgencmd get_throttled 2>/dev/null | cut -d= -f2)
+                    if [ -n "$THROTTLED_HEX" ]; then
+                        THROTTLED_VAL=$((THROTTLED_HEX))
+                        PWR_STATUS="ok"
+                        [ $((THROTTLED_VAL & 0x50000)) -ne 0 ] && PWR_STATUS="was_bad"
+                        [ $((THROTTLED_VAL & 0x5)) -ne 0 ] && PWR_STATUS="UNDERVOLT"
+                    fi
+                    CORE_VOLT=$(vcgencmd measure_volts core 2>/dev/null | grep -o '[0-9.]*' | head -1)
+                    [ -z "$CORE_VOLT" ] && CORE_VOLT="N/A"
+                fi
+
+                # USB disconnects since boot (cumulative counter)
+                # Peripherals (VRX/capture/RP2040) resetting may indicate power issues
+                USB_DISC=$(dmesg 2>/dev/null | grep -c 'USB disconnect')
+
+                # Network: burst ping (5 probes in 1s) for jitter and loss detection
+                PING_OUT=$(ping -c 5 -i 0.2 -W 2 "$RTMP_HOST_FOR_PING" 2>/dev/null)
+                PING_STATS=$(echo "$PING_OUT" | grep -o 'min/avg/max[^=]*= [0-9./]*' | grep -o '[0-9./]*$')
+                PING_LOSS=$(echo "$PING_OUT" | grep -o '[0-9]*% packet loss' | grep -o '^[0-9]*')
+                if [ -n "$PING_STATS" ]; then
+                    # min/avg/max/mdev -> keep min/avg/max
+                    PING_MS=$(echo "$PING_STATS" | cut -d/ -f1-3)
+                else
+                    PING_MS="timeout"
+                fi
+                [ -z "$PING_LOSS" ] && PING_LOSS="100"
                 RETRANS=$(ss -ti 2>/dev/null | grep -o "retrans:[0-9]*" | head -1 | cut -d: -f2 || echo "0")
-                debug_log "[METRIC] cpu_ffmpeg=${CPU_FFMPEG}% load=${LOAD_AVG} ping=${PING_MS}ms retrans=${RETRANS}"
+
+                # FFmpeg stats from debug_raw.log (speed, fps, drop)
+                # ffmpeg separates progress lines with \r and pads numbers (e.g. "fps= 24")
+                FFMPEG_SPEED="N/A"
+                FFMPEG_FPS="N/A"
+                FFMPEG_DROP="N/A"
+                if [ -f "$DEBUG_RAW_FILE" ]; then
+                    LAST_STATS=$(tail -c 2048 "$DEBUG_RAW_FILE" 2>/dev/null | tr '\r' '\n' | tail -n 5)
+                    SPEED_VAL=$(echo "$LAST_STATS" | grep -o 'speed= *[0-9.]*x' | tail -1 | grep -o '[0-9.]*x')
+                    FPS_VAL=$(echo "$LAST_STATS" | grep -o 'fps= *[0-9.]*' | tail -1 | grep -o '[0-9.]*$')
+                    DROP_VAL=$(echo "$LAST_STATS" | grep -o 'drop= *[0-9]*' | tail -1 | grep -o '[0-9]*$')
+                    [ -n "$SPEED_VAL" ] && FFMPEG_SPEED="$SPEED_VAL"
+                    [ -n "$FPS_VAL" ] && FFMPEG_FPS="$FPS_VAL"
+                    [ -n "$DROP_VAL" ] && FFMPEG_DROP="$DROP_VAL"
+                fi
+
+                debug_log "[METRIC] cpu_ffmpeg=${CPU_FFMPEG}% load=${LOAD_AVG} temp=${CPU_TEMP}°C mem=${MEM_FREE}MB pwr=${PWR_STATUS} volt=${CORE_VOLT}V usb_disc=${USB_DISC} ping=${PING_MS}ms loss=${PING_LOSS}% retrans=${RETRANS} speed=${FFMPEG_SPEED} fps=${FFMPEG_FPS} drop=${FFMPEG_DROP}"
             done
             ) &
             DEBUG_MON_PID=$!
@@ -436,7 +501,7 @@ while true; do
         # Log last ffmpeg stderr on disconnect
         if [ "$DEBUG_MODE" = "true" ] && [ -f "$DEBUG_RAW_FILE" ]; then
             debug_log "[EVENT] ffmpeg disconnected, last stderr lines:"
-            tail -n 10 "$DEBUG_RAW_FILE" | while read line; do
+            tail -c 4096 "$DEBUG_RAW_FILE" | tr '\r' '\n' | tail -n 10 | while read line; do
                 debug_log "[FFMPEG] $line"
             done
             > "$DEBUG_RAW_FILE"

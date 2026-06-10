@@ -36,8 +36,14 @@ source "$CONFIG_FILE"
 UDP_PORT=${UDP_PROXY_PORT}
 
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
-    FORPOST_IP=$(ip route get 1 | awk '{print $7; exit}')
-    log "Auto-detected IP: $FORPOST_IP"
+    FORPOST_IP=$(ip route get 1 2>/dev/null | awk '{print $7; exit}')
+    if [ -z "$FORPOST_IP" ]; then
+        # RTSP server runs locally, loopback works as fallback
+        FORPOST_IP="127.0.0.1"
+        log "WARNING: IP detection failed, falling back to $FORPOST_IP"
+    else
+        log "Auto-detected IP: $FORPOST_IP"
+    fi
 fi
 
 # Auto-detect RTSP transport using shared function

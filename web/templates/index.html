@@ -906,6 +906,15 @@
                             </select>
                         </div>
 
+                        <div class="form-group" style="margin-top: 16px;">
+                            <label for="DEBUG_MODE">Режим відладки (DEBUG_MODE)</label>
+                            <span class="help-text">Записує повну діагностику кожні 5 сек: CPU ffmpeg, температура, пам'ять, ping, TCP retransmits, encoding speed, fps, dropped frames. ffmpeg логує verbose. Використовуйте для пошуку проблем з затримкою, якістю чи мережею.</span>
+                            <select id="DEBUG_MODE" name="DEBUG_MODE">
+                                <option value="false">Вимкнено</option>
+                                <option value="true">Увімкнено</option>
+                            </select>
+                        </div>
+
                         <div style="margin-top: 24px; padding-top: 16px; border-top: 2px solid #e0e0e0;">
                             <div style="font-weight: 600; color: #333; margin-bottom: 12px;">
                                 ⚡ Енергозбереження <span style="font-size: 12px; color: #999; font-weight: normal;">(для

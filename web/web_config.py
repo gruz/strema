@@ -1183,6 +1183,22 @@ def analyze_logs():
                 'hint': 'Check Starlink connection stability'
             })
 
+        # Ping packet loss (partial loss within burst)
+        loss_lines = [l for l in lines if '[METRIC]' in l and 'loss=' in l]
+        if loss_lines:
+            loss_events = 0
+            for line in loss_lines[-50:]:
+                match = re.search(r'loss=([0-9]+)%', line)
+                if match and 0 < int(match.group(1)) < 100:
+                    loss_events += 1
+            if loss_events > 3:
+                issues.append({
+                    'type': 'network',
+                    'severity': 'medium',
+                    'message': f'Partial ping loss in {loss_events} samples — network jitter/micro-outages',
+                    'hint': 'Typical for Starlink handoffs. If frequent, check dish placement and obstructions'
+                })
+
         # Packet loss
         retrans_lines = [l for l in lines if '[METRIC]' in l and 'retrans=' in l]
         if retrans_lines:
@@ -1197,6 +1213,114 @@ def analyze_logs():
                     'severity': 'medium',
                     'message': 'TCP retransmits detected — packet loss on uplink',
                     'hint': 'Network congestion or Starlink handoff'
+                })
+
+        # Encoding speed (lag detection)
+        speed_lines = [l for l in lines if '[METRIC]' in l and 'speed=' in l and 'N/A' not in l]
+        if speed_lines:
+            speed_values = []
+            for line in speed_lines[-20:]:
+                match = re.search(r'speed=([0-9.]+)x', line)
+                if match:
+                    try:
+                        speed = float(match.group(1))
+                        speed_values.append(speed)
+                    except ValueError:
+                        pass
+            if speed_values and sum(speed_values) / len(speed_values) < 1.0:
+                issues.append({
+                    'type': 'encoding',
+                    'severity': 'high',
+                    'message': 'Encoding speed < 1.0x — cannot keep up with real-time',
+                    'hint': 'Lower VIDEO_BITRATE or VIDEO_FPS, disable overlays, or check CPU throttling'
+                })
+
+        # Dropped frames
+        drop_lines = [l for l in lines if '[METRIC]' in l and 'drop=' in l and 'N/A' not in l]
+        if drop_lines:
+            drop_values = []
+            for line in drop_lines[-20:]:
+                match = re.search(r'drop=([0-9]+)', line)
+                if match:
+                    drop_values.append(int(match.group(1)))
+            # drop is a cumulative counter within one ffmpeg session — use max
+            if drop_values and max(drop_values) > 0:
+                total_dropped = max(drop_values)
+                issues.append({
+                    'type': 'encoding',
+                    'severity': 'high',
+                    'message': f'{total_dropped} frames dropped — video quality degradation',
+                    'hint': 'CPU cannot process frames fast enough. Lower bitrate/FPS or disable overlays'
+                })
+
+        # USB disconnects (peripherals resetting — power or cable issues)
+        usb_lines = [l for l in lines if '[METRIC]' in l and 'usb_disc=' in l]
+        if usb_lines:
+            usb_values = []
+            for line in usb_lines:
+                match = re.search(r'usb_disc=([0-9]+)', line)
+                if match:
+                    usb_values.append(int(match.group(1)))
+            if len(usb_values) >= 2 and usb_values[-1] > usb_values[0]:
+                new_disconnects = usb_values[-1] - usb_values[0]
+                issues.append({
+                    'type': 'power',
+                    'severity': 'high',
+                    'message': f'{new_disconnects} USB disconnect(s) during monitoring — peripherals (VRX/capture/RP2040) are resetting',
+                    'hint': 'Likely power supply issue or loose USB cable. Check dmesg to identify which device resets'
+                })
+
+        # Power: undervoltage detection (Raspberry Pi)
+        undervolt_now = [l for l in lines if '[METRIC]' in l and 'pwr=UNDERVOLT' in l]
+        undervolt_past = [l for l in lines if '[METRIC]' in l and 'pwr=was_bad' in l]
+        if undervolt_now:
+            issues.append({
+                'type': 'power',
+                'severity': 'high',
+                'message': f'Undervoltage detected in {len(undervolt_now)} samples — power supply insufficient',
+                'hint': 'Check PoE cable length/quality and power supply. Voltage drops cause CPU throttling and stream lag'
+            })
+        elif undervolt_past:
+            issues.append({
+                'type': 'power',
+                'severity': 'medium',
+                'message': 'Undervoltage occurred since boot (not currently active)',
+                'hint': 'Power dipped at some point. Monitor pwr= metric, check PoE/power supply under load'
+            })
+
+        # CPU temperature (throttling)
+        temp_lines = [l for l in lines if '[METRIC]' in l and 'temp=' in l and 'N/A' not in l]
+        if temp_lines:
+            temp_values = []
+            for line in temp_lines[-20:]:
+                match = re.search(r'temp=([0-9.]+)', line)
+                if match:
+                    try:
+                        temp_values.append(float(match.group(1)))
+                    except ValueError:
+                        pass
+            if temp_values and max(temp_values) > 75:
+                issues.append({
+                    'type': 'cpu',
+                    'severity': 'high',
+                    'message': f'CPU temperature peaked at {max(temp_values):.1f}°C — possible thermal throttling',
+                    'hint': 'Improve cooling, reduce enclosure temperature, or lower encoding load'
+                })
+
+        # Low memory
+        mem_lines = [l for l in lines if '[METRIC]' in l and 'mem=' in l and 'N/A' not in l]
+        if mem_lines:
+            mem_values = []
+            for line in mem_lines[-20:]:
+                match = re.search(r'mem=([0-9]+)', line)
+                if match:
+                    mem_values.append(int(match.group(1)))
+            if mem_values and min(mem_values) < 50:
+                issues.append({
+                    'type': 'memory',
+                    'severity': 'medium',
+                    'message': f'Memory critically low ({min(mem_values)}MB free) — risk of OOM',
+                    'hint': 'Check for memory leaks. Restarting services may help temporarily'
                 })
 
         # Disconnections
@@ -1216,8 +1340,14 @@ def analyze_logs():
             })
 
         recommendations = []
+        if any(i['type'] == 'power' for i in issues):
+            recommendations.append('Fix power supply first — undervoltage causes throttling and instability')
         if any(i['type'] == 'cpu' for i in issues):
-            recommendations.append('Reduce encoding load (lower bitrate/FPS or disable overlays)')
+            recommendations.append('Reduce encoding load and improve cooling')
+        if any(i['type'] == 'encoding' for i in issues):
+            recommendations.append('Lower bitrate/FPS or disable overlays to reduce encoding load')
+        if any(i['type'] == 'memory' for i in issues):
+            recommendations.append('Check for memory leaks and restart services if needed')
         if any(i['type'] == 'network' for i in issues):
             recommendations.append('Check network stability (Starlink handoffs may cause temporary issues)')
         if any(i['type'] == 'stream' for i in issues):
