@@ -10,10 +10,67 @@
 set -e
 
 GITHUB_REPO="gruz/strema"
+
+# Helper to get the latest stable release tag from GitHub (no jq required)
+get_latest_release() {
+    curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null \
+        | grep -o '"tag_name": "[^"]*"' \
+        | head -1 \
+        | sed 's/.*"tag_name": "//;s/"$//'
+}
+
+# Download and extract the strema archive into the current directory.
+# Sets SOURCE_DIR variable. Exits on failure.
+download_strema() {
+    if [ "$VERSION" = "latest" ]; then
+        local LATEST_TAG
+        LATEST_TAG=$(get_latest_release)
+        if [ -n "$LATEST_TAG" ]; then
+            echo "Downloading latest stable release $LATEST_TAG..."
+            local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_TAG/strema-$LATEST_TAG.tar.gz"
+            curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
+                echo "❌ Download failed"
+                rm -rf "$TMP_DIR"
+                exit 1
+            }
+            tar -xzf strema.tar.gz
+            SOURCE_DIR="strema"
+        else
+            echo "⚠️  Could not determine latest release, falling back to master..."
+            local ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/master.tar.gz"
+            curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
+                echo "❌ Download failed"
+                rm -rf "$TMP_DIR"
+                exit 1
+            }
+            tar -xzf strema.tar.gz
+            SOURCE_DIR="strema-master"
+        fi
+    elif [ "$VERSION" = "master" ]; then
+        echo "Downloading latest master branch..."
+        local ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/master.tar.gz"
+        curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
+            echo "❌ Download failed"
+            rm -rf "$TMP_DIR"
+            exit 1
+        }
+        tar -xzf strema.tar.gz
+        SOURCE_DIR="strema-master"
+    else
+        echo "Downloading release $VERSION..."
+        local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION.tar.gz"
+        curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
+            echo "❌ Download failed. Check if release $VERSION exists"
+            rm -rf "$TMP_DIR"
+            exit 1
+        }
+        tar -xzf strema.tar.gz
+        SOURCE_DIR="strema"
+    fi
+}
+
 VERSION="${1:-latest}"
 [ -z "$VERSION" ] && VERSION="latest"
-# Treat 'master' as 'latest' for compatibility
-[ "$VERSION" = "master" ] && VERSION="latest"
 
 echo "=========================================="
 echo "Installing Forpost Stream"
@@ -130,12 +187,17 @@ if [ -d "$SCRIPT_DIR/.git" ]; then
     
     echo "✅ Git update complete"
     
-elif [ -d "$INSTALL_DIR" ]; then
-    # Remote installation - update existing
-    echo ""
-    echo "🌐 Remote installation - updating"
+else
+    # Remote installation (fresh or update)
+    if [ -d "$INSTALL_DIR" ]; then
+        echo ""
+        echo "🌐 Remote installation - updating"
+    else
+        echo ""
+        echo "🌐 Remote installation - fresh install"
+    fi
     
-    # Backup config
+    # Backup config if it exists (safe to call even when file is missing)
     if [ -f "$INSTALL_DIR/config/stream.conf" ]; then
         TMP_BACKUP="/tmp/strema_config_backup_$$"
         cp "$INSTALL_DIR/config/stream.conf" "$TMP_BACKUP"
@@ -144,77 +206,18 @@ elif [ -d "$INSTALL_DIR" ]; then
     # Download and extract
     TMP_DIR=$(mktemp -d)
     cd "$TMP_DIR"
+    download_strema
     
-    if [ "$VERSION" = "latest" ]; then
-        echo "Downloading latest from master..."
-        ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/master.tar.gz"
-        curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
-            echo "❌ Download failed"
-            rm -rf "$TMP_DIR"
-            exit 1
-        }
-        tar -xzf strema.tar.gz
-        SOURCE_DIR="strema-master"
-    else
-        echo "Downloading release $VERSION..."
-        ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION.tar.gz"
-        curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
-            echo "❌ Download failed. Check if release $VERSION exists"
-            rm -rf "$TMP_DIR"
-            exit 1
-        }
-        tar -xzf strema.tar.gz
-        SOURCE_DIR="strema"
-    fi
-    
-    # Replace files
+    # Replace / install files
     rm -rf "$INSTALL_DIR"
     mkdir -p "$REAL_HOME"
     mv "$SOURCE_DIR" "$INSTALL_DIR"
     
-    # Restore config
+    # Restore config if backup was created
     if [ -n "$TMP_BACKUP" ] && [ -f "$TMP_BACKUP" ]; then
         cp "$TMP_BACKUP" "$INSTALL_DIR/config/stream.conf"
         rm -f "$TMP_BACKUP"
     fi
-    
-    cd "$REAL_HOME"
-    rm -rf "$TMP_DIR"
-    echo "✅ Download complete"
-    
-else
-    # Remote installation - fresh install
-    echo ""
-    echo "🌐 Remote installation - fresh install"
-    
-    TMP_DIR=$(mktemp -d)
-    cd "$TMP_DIR"
-    
-    if [ "$VERSION" = "latest" ]; then
-        echo "Downloading latest from master..."
-        ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/master.tar.gz"
-        curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
-            echo "❌ Download failed"
-            rm -rf "$TMP_DIR"
-            exit 1
-        }
-        tar -xzf strema.tar.gz
-        SOURCE_DIR="strema-master"
-    else
-        echo "Downloading release $VERSION..."
-        ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION.tar.gz"
-        curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
-            echo "❌ Download failed. Check if release $VERSION exists"
-            rm -rf "$TMP_DIR"
-            exit 1
-        }
-        tar -xzf strema.tar.gz
-        SOURCE_DIR="strema"
-    fi
-    
-    # Install files
-    mkdir -p "$REAL_HOME"
-    mv "$SOURCE_DIR" "$INSTALL_DIR"
     
     cd "$REAL_HOME"
     rm -rf "$TMP_DIR"

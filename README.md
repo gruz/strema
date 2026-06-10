@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bas
 
 **⚠️ ВАЖЛИВО:** Стрімінг за замовчуванням **ВИМКНЕНИЙ**. Увімкніть його через веб-інтерфейс.
 
-> **Примітка:** За замовчуванням встановлюється остання версія з гілки `master` (найновіші функції).
+> **Примітка:** За замовчуванням встановлюється останній стабільний реліз.
 
 ---
 
@@ -26,6 +26,11 @@ curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bas
 ### Стабільна версія (реліз)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash -s v0.1.0
+```
+
+### Останній код з master (для тестування)
+```bash
+curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash -s master
 ```
 
 ### Для розробників (з git)
