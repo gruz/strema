@@ -876,17 +876,15 @@
                     <div class="section-title">Якість відео</div>
 
                     <div class="form-group">
-                        <label for="VIDEO_CRF">CRF (якість відео)</label>
-                        <span class="help-text">28-32 = низький CPU, 23-27 = краща якість</span>
-                        <input type="number" id="VIDEO_CRF" name="VIDEO_CRF" value="28" min="18" max="35">
+                        <label for="VIDEO_BITRATE">Бітрейт відео</label>
+                        <span class="help-text">Рекомендація Delta: ≤2500k. Приклади: 1500k, 1800k, 2000k, 2500k</span>
+                        <input type="text" id="VIDEO_BITRATE" name="VIDEO_BITRATE" value="2000k" pattern="[0-9]+k">
                     </div>
 
                     <div class="form-group">
                         <label for="VIDEO_FPS">Кадрів на секунду (FPS)</label>
-                        <span class="help-text">15 = економія трафіку, 25 = плавне відео</span>
-                        <span class="help-text" style="color: #666; font-style: italic;">⚠️ Працює тільки при
-                            перекодуванні (коли увімкнено оверлей або частоту)</span>
-                        <input type="number" id="VIDEO_FPS" name="VIDEO_FPS" value="15" min="10" max="30">
+                        <span class="help-text">Рекомендація Delta: ≤24. Нижче = менше трафіку, менш плавне відео</span>
+                        <input type="number" id="VIDEO_FPS" name="VIDEO_FPS" value="24" min="10" max="24">
                     </div>
 
                     <details style="margin-top: 16px;">
@@ -987,7 +985,7 @@
 # Example settings:
 RTMP_URL=rtmps://server:port/app/key
 OVERLAY_TEXT=My Drone
-VIDEO_CRF=30"></textarea>
+VIDEO_BITRATE=2000k"></textarea>
                 </div>
 
                 <div class="button-group">

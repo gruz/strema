@@ -117,7 +117,7 @@ stream_critical_changed() {
     local critical_keys=(
         "RTMP_URL"
         "VIDEO_DEVICE"
-        "VIDEO_CRF"
+        "VIDEO_BITRATE"
         "VIDEO_FPS"
         "RTSP_PORT"
         "USE_UDP_PROXY"

@@ -229,6 +229,11 @@ DYNAMIC_OVERLAY_BORDER_COLOR=${DYNAMIC_OVERLAY_BORDER_COLOR:-black}
 # GOP = FPS * 2 (keyframe every 2 seconds)
 VIDEO_GOP=$((VIDEO_FPS * 2))
 
+# Calculate bufsize as 1.5x bitrate for better motion quality
+# while keeping maxrate capped at the target bitrate (Delta requirement)
+VIDEO_BITRATE_NUM="${VIDEO_BITRATE%k}"
+VIDEO_BUFSIZE=$((VIDEO_BITRATE_NUM * 15 / 10))k
+
 # Build video filter and encoding parameters
 if [ "$OVERLAY_ENABLED" = "true" ]; then
     
@@ -297,19 +302,14 @@ if [ "$OVERLAY_ENABLED" = "true" ]; then
         VF_FILTER="$DYNAMIC_FILTER"
     fi
     
-    log "Using optimized software encoding (libx264)"
-    log "Parameters: CRF=${VIDEO_CRF}, FPS=${VIDEO_FPS}, GOP=${VIDEO_GOP}"
+    log "Using optimized software encoding (libx264, baseline profile)"
+    log "Parameters: BITRATE=${VIDEO_BITRATE}, FPS=${VIDEO_FPS}, GOP=${VIDEO_GOP}"
     log "Static overlay: font size=${OVERLAY_FONTSIZE_CUSTOM}, color=${OVERLAY_TEXT_COLOR}"
     log "Frequency: font size=${FREQUENCY_FONTSIZE}, color=${FREQUENCY_TEXT_COLOR}"
     log "Dynamic overlay: font size=${DYNAMIC_OVERLAY_FONTSIZE}, color=${DYNAMIC_OVERLAY_TEXT_COLOR}"
-    
-    # Build video encoding options
-    VIDEO_OPTS="-vf \"$VF_FILTER\" -r ${VIDEO_FPS} -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -crf ${VIDEO_CRF} -g ${VIDEO_GOP} -sc_threshold 0 -threads 2"
 else
-    log "Overlay disabled - using stream copy"
-    
-    # Build video copy options
-    VIDEO_OPTS="-r ${VIDEO_FPS} -c:v copy"
+    log "Overlay disabled - using stream copy (no re-encoding)"
+    log "WARNING: Camera stream parameters (bitrate/profile/FPS) may not match RTMP server requirements"
 fi
 
 # Auto-reconnect loop (watchdog service handles service restarts)
@@ -335,13 +335,17 @@ while true; do
         
         # Build video encoding parameters and run in background
         if [ "$OVERLAY_ENABLED" = "true" ]; then
-            # With overlay - need to encode
+            # With overlay - re-encode with Delta-compatible settings:
+            # libx264, constrained bitrate (maxrate capped), zerolatency, no B-frames, GOP = 2 * FPS.
+            # Bufsize is 1.5x bitrate to improve motion quality without exceeding maxrate.
             ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
                 $INPUT_PARAMS \
                 -vf "$VF_FILTER" \
+                -r ${VIDEO_FPS} \
                 -c:v libx264 -preset ultrafast -tune zerolatency \
-                -bf 0 -pix_fmt yuv420p \
-                -crf ${VIDEO_CRF} -g ${VIDEO_GOP} \
+                -bf 0 -pix_fmt yuv420p -sc_threshold 0 \
+                -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
+                -g ${VIDEO_GOP} \
                 -an -f flv "$RTMP_URL" &
         else
             # No overlay - just copy
