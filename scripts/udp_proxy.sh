@@ -67,21 +67,18 @@ log "=========================================="
 RECONNECT_DELAY=5
 
 while true; do
-    log "Connecting to RTSP source..."
-    
     # Read from RTSP and stream to UDP
     # -c:v copy = no re-encoding, minimal CPU
     # -f mpegts = MPEG-TS format for UDP streaming
     # -flush_packets 1 = immediate packet flushing for low latency
-    ffmpeg -hide_banner -loglevel info \
+    ffmpeg -hide_banner -loglevel error \
         -rtsp_transport "$RTSP_TRANSPORT" \
         -fflags +genpts+nobuffer \
         -i "$SOURCE_RTSP_URL" \
         -c:v copy -an \
         -f mpegts \
         -flush_packets 1 \
-        "$UDP_OUTPUT"
+        "$UDP_OUTPUT" 2>> "$LOG_FILE"
     
-    log "Proxy disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
     sleep $RECONNECT_DELAY
 done

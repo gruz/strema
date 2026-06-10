@@ -151,6 +151,7 @@ stream_critical_changed() {
         "DYNAMIC_OVERLAY_BORDER_WIDTH"
         "DYNAMIC_OVERLAY_BORDER_COLOR"
         "FFMPEG_LOGLEVEL"
+        "DEBUG_MODE"
     )
     
     for key in "${critical_keys[@]}"; do

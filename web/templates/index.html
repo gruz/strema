@@ -463,6 +463,9 @@
                 <button type="button" class="tab-btn" id="rawTab" onclick="switchTab('raw')">
                     📄 Текстовий редактор
                 </button>
+                <button type="button" class="tab-btn" id="logsTab" onclick="switchTab('logs')">
+                    📋 Логи
+                </button>
             </div>
 
             <!-- Form Tab Content -->
@@ -1009,6 +1012,31 @@ VIDEO_BITRATE=2000k"></textarea>
                 <div id="rawEditorStatus"
                     style="display: none; margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 13px;"></div>
             </div>
+
+            <!-- Logs Tab Content -->
+            <div id="logsTabContent" class="tab-content" style="display: none;">
+                <div class="section-title">📋 Логи системи</div>
+                <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+                    <select id="logFileSelect" style="padding: 8px; border-radius: 6px; border: 1px solid #e0e0e0; font-size: 14px;">
+                        <option value="stream.log">Лог стріму</option>
+                        <option value="watchdog.log">Watchdog</option>
+                        <option value="udp_proxy.log">UDP Proxy</option>
+                        <option value="config_handler.log">Config Handler</option>
+                        <option value="power_settings.log">Power Settings</option>
+                        <option value="debug.log">Debug</option>
+                    </select>
+                    <button type="button" class="btn btn-primary" onclick="loadLogs()" style="flex: none; padding: 8px 16px;">
+                        🔄 Оновити
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="analyzeLogs()" style="flex: none; padding: 8px 16px; background: #6c757d; color: white;">
+                        🔍 Аналізувати
+                    </button>
+                </div>
+                <div id="logAnalysis" style="display: none; margin-bottom: 12px; padding: 12px; border-radius: 8px; background: #2d2d2d; border: 1px solid #444;"></div>
+                <div id="logViewer" style="background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 12px; max-height: 500px; overflow-y: auto; white-space: pre-wrap;">
+                    Оберіть файл логу і натисніть "Оновити"
+                </div>
+            </div>
         </div>
 
         <div class="card">
@@ -1197,23 +1225,31 @@ VIDEO_BITRATE=2000k"></textarea>
         function switchTab(tabName) {
             const formTab = document.getElementById('formTab');
             const rawTab = document.getElementById('rawTab');
+            const logsTab = document.getElementById('logsTab');
             const formContent = document.getElementById('formTabContent');
             const rawContent = document.getElementById('rawTabContent');
+            const logsContent = document.getElementById('logsTabContent');
+
+            // Reset all
+            formTab.classList.remove('active');
+            rawTab.classList.remove('active');
+            logsTab.classList.remove('active');
+            formContent.style.display = 'none';
+            rawContent.style.display = 'none';
+            logsContent.style.display = 'none';
 
             if (tabName === 'form') {
                 formTab.classList.add('active');
-                rawTab.classList.remove('active');
                 formContent.style.display = 'block';
-                rawContent.style.display = 'none';
             } else if (tabName === 'raw') {
-                formTab.classList.remove('active');
                 rawTab.classList.add('active');
-                formContent.style.display = 'none';
                 rawContent.style.display = 'block';
-
-                // Load raw config when switching to raw tab
                 loadRawConfig();
                 loadBackups();
+            } else if (tabName === 'logs') {
+                logsTab.classList.add('active');
+                logsContent.style.display = 'block';
+                loadLogs();
             }
         }
 
@@ -2705,6 +2741,89 @@ VIDEO_BITRATE=2000k"></textarea>
             xhr.timeout = 120000;
             xhr.send(formData);
         });
+
+        // --- Log Viewer ---
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function loadLogs() {
+            const file = document.getElementById('logFileSelect').value;
+            const viewer = document.getElementById('logViewer');
+            viewer.textContent = 'Завантаження...';
+
+            try {
+                const response = await fetch(`/api/logs?file=${encodeURIComponent(file)}&lines=500`);
+                const data = await response.json();
+
+                if (data.error) {
+                    viewer.textContent = 'Помилка: ' + data.error;
+                    return;
+                }
+
+                if (!data.lines || data.lines.length === 0) {
+                    viewer.textContent = 'Лог порожній або не знайдено';
+                    return;
+                }
+
+                // Color-code log lines
+                const colored = data.lines.map(line => {
+                    if (line.includes('[ERROR]')) return `<span style="color: #f48771;">${escapeHtml(line)}</span>`;
+                    if (line.includes('[WARNING]')) return `<span style="color: #dcdcaa;">${escapeHtml(line)}</span>`;
+                    if (line.includes('[METRIC]')) return `<span style="color: #9cdcfe;">${escapeHtml(line)}</span>`;
+                    if (line.includes('[EVENT]')) return `<span style="color: #b5cea8;">${escapeHtml(line)}</span>`;
+                    if (line.includes('[ACTION]')) return `<span style="color: #ce9178;">${escapeHtml(line)}</span>`;
+                    if (line.includes('[FFMPEG]')) return `<span style="color: #808080;">${escapeHtml(line)}</span>`;
+                    return escapeHtml(line);
+                }).join('\n');
+
+                viewer.innerHTML = colored;
+                viewer.scrollTop = viewer.scrollHeight;
+            } catch (err) {
+                viewer.textContent = 'Помилка завантаження: ' + err.message;
+            }
+        }
+
+        async function analyzeLogs() {
+            const analysisDiv = document.getElementById('logAnalysis');
+            analysisDiv.style.display = 'block';
+            analysisDiv.innerHTML = '<div style="color: #999;">Аналіз...</div>';
+
+            try {
+                const response = await fetch('/api/logs/analyze');
+                const data = await response.json();
+
+                if (data.error) {
+                    analysisDiv.innerHTML = `<div style="color: #f48771;">Помилка: ${escapeHtml(data.error)}</div>`;
+                    return;
+                }
+
+                let html = '';
+                if (data.issues && data.issues.length > 0) {
+                    html += '<div style="font-weight: 600; margin-bottom: 8px; color: #f48771;">⚠️ Знайдено проблеми:</div>';
+                    data.issues.forEach(issue => {
+                        const color = issue.severity === 'high' ? '#f48771' : '#dcdcaa';
+                        html += `<div style="margin: 8px 0; padding: 8px; background: #1e1e1e; border-radius: 4px; border-left: 3px solid ${color};">
+                            <div style="font-weight: 600; color: ${color};">${escapeHtml(issue.message)}</div>
+                            <div style="font-size: 12px; color: #808080; margin-top: 4px;">💡 ${escapeHtml(issue.hint)}</div>
+                        </div>`;
+                    });
+                    html += `<div style="margin-top: 12px; padding: 8px; background: #1e3a1e; border-radius: 4px; color: #b5cea8;">
+                        <strong>Рекомендація:</strong> ${escapeHtml(data.recommendation)}
+                    </div>`;
+                } else {
+                    html += `<div style="color: #b5cea8; padding: 8px; background: #1e3a1e; border-radius: 4px;">
+                        ✅ ${escapeHtml(data.recommendation)}
+                    </div>`;
+                }
+
+                analysisDiv.innerHTML = html;
+            } catch (err) {
+                analysisDiv.innerHTML = `<div style="color: #f48771;">Помилка аналізу: ${escapeHtml(err.message)}</div>`;
+            }
+        }
     </script>
 </body>
 

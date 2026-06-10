@@ -166,7 +166,6 @@ CPU_USAGE=$(top -b -n 1 -p "$ACTUAL_FFMPEG_PID" 2>/dev/null | tail -1 | awk '{pr
 
 # If CPU usage is normal, everything is healthy
 if [ -z "$CPU_USAGE" ] || [ "$CPU_USAGE" -ge 1 ]; then
-    log "OK: Service healthy (ffmpeg PID $ACTUAL_FFMPEG_PID, CPU ${CPU_USAGE}%, UDP proxy: $UDP_PROXY_ACTIVE)"
     exit 0
 fi
 

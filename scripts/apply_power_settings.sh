@@ -81,8 +81,4 @@ else
     log "Ethernet speed: auto (no changes)"
 fi
 
-log "=========================================="
-log "Power settings applied successfully"
-log "=========================================="
-
 exit 0

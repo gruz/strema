@@ -1085,5 +1085,151 @@ def firmware_flash():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+# --- Log Viewer ---
+
+LOGS_DIR = PROJECT_ROOT / 'logs'
+
+ALLOWED_LOGS = {
+    'stream.log': 'Лог стріму',
+    'watchdog.log': 'Watchdog',
+    'udp_proxy.log': 'UDP Proxy',
+    'config_handler.log': 'Config Handler',
+    'power_settings.log': 'Power Settings',
+    'debug.log': 'Debug',
+}
+
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    """API endpoint to read log files."""
+    try:
+        log_file = request.args.get('file', 'stream.log')
+        lines = request.args.get('lines', '500')
+
+        # Security: only allow specific log files
+        if log_file not in ALLOWED_LOGS:
+            return jsonify({'error': 'Invalid log file'}), 400
+
+        try:
+            lines = int(lines)
+            if lines < 1 or lines > 5000:
+                lines = 500
+        except ValueError:
+            lines = 500
+
+        log_path = LOGS_DIR / log_file
+        if not log_path.exists():
+            return jsonify({'lines': [], 'message': 'Log file not found', 'available_files': list(ALLOWED_LOGS.keys())})
+
+        # Read last N lines
+        result = subprocess.run(
+            ['tail', '-n', str(lines), str(log_path)],
+            capture_output=True,
+            text=True
+        )
+
+        lines_list = result.stdout.strip().split('\n') if result.stdout.strip() else []
+
+        return jsonify({
+            'file': log_file,
+            'lines': lines_list,
+            'total': len(lines_list),
+            'available_files': list(ALLOWED_LOGS.keys())
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/logs/analyze', methods=['GET'])
+def analyze_logs():
+    """Analyze debug.log and return summary of issues."""
+    try:
+        log_path = LOGS_DIR / 'debug.log'
+        if not log_path.exists():
+            return jsonify({'issues': [], 'recommendation': 'Debug log not found. Enable DEBUG_MODE first.'})
+
+        result = subprocess.run(
+            ['tail', '-n', '500', str(log_path)],
+            capture_output=True,
+            text=True
+        )
+        lines = result.stdout.strip().split('\n') if result.stdout.strip() else []
+
+        issues = []
+
+        # CPU check
+        cpu_lines = [l for l in lines if '[METRIC]' in l and 'cpu_ffmpeg=' in l]
+        if cpu_lines:
+            cpu_values = []
+            for line in cpu_lines[-20:]:
+                match = re.search(r'cpu_ffmpeg=([0-9]+)', line)
+                if match:
+                    cpu_values.append(int(match.group(1)))
+            if cpu_values and sum(cpu_values) / len(cpu_values) > 80:
+                issues.append({
+                    'type': 'cpu',
+                    'severity': 'high',
+                    'message': 'Average ffmpeg CPU > 80% — system overloaded',
+                    'hint': 'Reduce VIDEO_BITRATE, VIDEO_FPS, or disable overlays'
+                })
+
+        # Network check
+        timeouts = [l for l in lines if '[METRIC]' in l and 'ping=timeout' in l]
+        if len(timeouts) > 3:
+            issues.append({
+                'type': 'network',
+                'severity': 'high',
+                'message': f'{len(timeouts)} ping timeouts — unstable network (possible Starlink handoff)',
+                'hint': 'Check Starlink connection stability'
+            })
+
+        # Packet loss
+        retrans_lines = [l for l in lines if '[METRIC]' in l and 'retrans=' in l]
+        if retrans_lines:
+            retrans_values = []
+            for line in retrans_lines[-20:]:
+                match = re.search(r'retrans=([0-9]+)', line)
+                if match:
+                    retrans_values.append(int(match.group(1)))
+            if retrans_values and max(retrans_values) > 0:
+                issues.append({
+                    'type': 'network',
+                    'severity': 'medium',
+                    'message': 'TCP retransmits detected — packet loss on uplink',
+                    'hint': 'Network congestion or Starlink handoff'
+                })
+
+        # Disconnections
+        disconnects = [l for l in lines if '[EVENT]' in l and 'disconnected' in l]
+        if len(disconnects) > 3:
+            issues.append({
+                'type': 'stream',
+                'severity': 'medium',
+                'message': f'{len(disconnects)} stream disconnections',
+                'hint': 'Check network stability or RTMP server health'
+            })
+
+        if not issues:
+            return jsonify({
+                'issues': [],
+                'recommendation': 'No issues detected. Stream appears healthy.'
+            })
+
+        recommendations = []
+        if any(i['type'] == 'cpu' for i in issues):
+            recommendations.append('Reduce encoding load (lower bitrate/FPS or disable overlays)')
+        if any(i['type'] == 'network' for i in issues):
+            recommendations.append('Check network stability (Starlink handoffs may cause temporary issues)')
+        if any(i['type'] == 'stream' for i in issues):
+            recommendations.append('Monitor RTMP server availability')
+
+        return jsonify({
+            'issues': issues,
+            'recommendation': ' \u2022 '.join(recommendations)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8081, debug=False)

@@ -23,6 +23,15 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
+# Debug logging
+DEBUG_LOG_FILE="$PROJECT_ROOT/logs/debug.log"
+DEBUG_RAW_FILE="$PROJECT_ROOT/logs/debug_raw.log"
+MAX_DEBUG_SIZE=5242880  # 5MB
+
+debug_log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$DEBUG_LOG_FILE"
+}
+
 # Check for configuration file
 if [ ! -f "$CONFIG_FILE" ]; then
     log "ERROR: Configuration file not found: $CONFIG_FILE"
@@ -39,6 +48,14 @@ fi
 source "$CONFIG_FILE"
 
 # FFmpeg logging level is now loaded from defaults.conf
+
+# Initialize debug mode
+if [ "$DEBUG_MODE" = "true" ]; then
+    if [ -f "$DEBUG_LOG_FILE" ] && [ $(stat -c%s "$DEBUG_LOG_FILE" 2>/dev/null) -gt $MAX_DEBUG_SIZE ]; then
+        mv "$DEBUG_LOG_FILE" "$DEBUG_LOG_FILE.old"
+    fi
+    > "$DEBUG_RAW_FILE"
+fi
 
 # Auto-detect IP address if not set in config
 if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
@@ -338,23 +355,60 @@ while true; do
             # With overlay - re-encode with Delta-compatible settings:
             # libx264, constrained bitrate (maxrate capped), zerolatency, no B-frames, GOP = 2 * FPS.
             # Bufsize is 1.5x bitrate to improve motion quality without exceeding maxrate.
-            ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
-                $INPUT_PARAMS \
-                -vf "$VF_FILTER" \
-                -r ${VIDEO_FPS} \
-                -c:v libx264 -preset ultrafast -tune zerolatency \
-                -bf 0 -pix_fmt yuv420p -sc_threshold 0 \
-                -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
-                -g ${VIDEO_GOP} \
-                -an -f flv "$RTMP_URL" &
+            if [ "$DEBUG_MODE" = "true" ]; then
+                ffmpeg -hide_banner -loglevel info -stats_period 5 \
+                    $INPUT_PARAMS \
+                    -vf "$VF_FILTER" \
+                    -r ${VIDEO_FPS} \
+                    -c:v libx264 -preset ultrafast -tune zerolatency \
+                    -bf 0 -pix_fmt yuv420p -sc_threshold 0 \
+                    -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
+                    -g ${VIDEO_GOP} \
+                    -an -f flv "$RTMP_URL" \
+                    2>> "$DEBUG_RAW_FILE" &
+            else
+                ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
+                    $INPUT_PARAMS \
+                    -vf "$VF_FILTER" \
+                    -r ${VIDEO_FPS} \
+                    -c:v libx264 -preset ultrafast -tune zerolatency \
+                    -bf 0 -pix_fmt yuv420p -sc_threshold 0 \
+                    -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
+                    -g ${VIDEO_GOP} \
+                    -an -f flv "$RTMP_URL" &
+            fi
         else
             # No overlay - just copy
-            ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
-                $INPUT_PARAMS \
-                -c:v copy -an -f flv "$RTMP_URL" &
+            if [ "$DEBUG_MODE" = "true" ]; then
+                ffmpeg -hide_banner -loglevel info -stats_period 5 \
+                    $INPUT_PARAMS \
+                    -c:v copy -an -f flv "$RTMP_URL" \
+                    2>> "$DEBUG_RAW_FILE" &
+            else
+                ffmpeg -hide_banner -loglevel "$FFMPEG_LOGLEVEL" \
+                    $INPUT_PARAMS \
+                    -c:v copy -an -f flv "$RTMP_URL" &
+            fi
         fi
         
         FFMPEG_PID=$!
+        
+        # Start debug monitor if enabled
+        if [ "$DEBUG_MODE" = "true" ]; then
+            RTMP_HOST_FOR_PING=$(echo "$RTMP_URL" | sed -n 's|rtmp[s]*://\([^/:]*\).*|\1|p')
+            (
+            while kill -0 "$FFMPEG_PID" 2>/dev/null; do
+                sleep 5
+                CPU_FFMPEG=$(top -b -n1 -p "$FFMPEG_PID" 2>/dev/null | tail -1 | awk '{print $9}' | cut -d. -f1)
+                LOAD_AVG=$(cut -d' ' -f1 /proc/loadavg)
+                PING_MS=$(ping -c 1 -W 2 "$RTMP_HOST_FOR_PING" 2>/dev/null | grep 'time=' | sed 's/.*time=\([0-9.]*\).*/\1/')
+                [ -z "$PING_MS" ] && PING_MS="timeout"
+                RETRANS=$(ss -ti 2>/dev/null | grep -o "retrans:[0-9]*" | head -1 | cut -d: -f2 || echo "0")
+                debug_log "[METRIC] cpu_ffmpeg=${CPU_FFMPEG}% load=${LOAD_AVG} ping=${PING_MS}ms retrans=${RETRANS}"
+            done
+            ) &
+            DEBUG_MON_PID=$!
+        fi
         
         # Monitor ffmpeg and scan state
         # During streaming: tolerant detection (threshold=2) - 2 changes = scanning
@@ -372,6 +426,22 @@ while true; do
         done
         
         wait $FFMPEG_PID 2>/dev/null
+        
+        # Stop debug monitor
+        if [ "$DEBUG_MODE" = "true" ] && [ -n "$DEBUG_MON_PID" ]; then
+            kill $DEBUG_MON_PID 2>/dev/null
+            wait $DEBUG_MON_PID 2>/dev/null
+        fi
+        
+        # Log last ffmpeg stderr on disconnect
+        if [ "$DEBUG_MODE" = "true" ] && [ -f "$DEBUG_RAW_FILE" ]; then
+            debug_log "[EVENT] ffmpeg disconnected, last stderr lines:"
+            tail -n 10 "$DEBUG_RAW_FILE" | while read line; do
+                debug_log "[FFMPEG] $line"
+            done
+            > "$DEBUG_RAW_FILE"
+        fi
+        
         log "Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
     else
         log "Scanner is scanning, waiting for lock... (checking again in ${RECONNECT_DELAY}s)"
