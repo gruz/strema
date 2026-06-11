@@ -1780,7 +1780,7 @@ VIDEO_BITRATE=2000k"></textarea>
                                         ${badge}
                                     </div>
                                     <div>
-                                        ${isCurrent ? '' : `<button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="installUpdate('${release.version}')">Оновити</button>`}
+                                        ${(isCurrent && release.version !== 'master') ? '' : `<button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="installUpdate('${release.version}')">Оновити</button>`}
                                     </div>
                                 </div>
                                 ${release.body ? `<div style="font-size: 12px; color: #666; white-space: pre-wrap;">${release.body.substring(0, 200)}${release.body.length > 200 ? '...' : ''}</div>` : ''}
