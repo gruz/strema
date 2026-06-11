@@ -1031,7 +1031,7 @@ VIDEO_BITRATE=2000k"></textarea>
             <div id="logsTabContent" class="tab-content" style="display: none;">
                 <div class="section-title">📋 Логи системи</div>
                 <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
-                    <select id="logFileSelect" style="padding: 8px; border-radius: 6px; border: 1px solid #e0e0e0; font-size: 14px;">
+                    <select id="logFileSelect" onchange="loadLogs()" style="padding: 8px; border-radius: 6px; border: 1px solid #e0e0e0; font-size: 14px;">
                         <option value="stream.log">Лог стріму</option>
                         <option value="watchdog.log">Watchdog</option>
                         <option value="udp_proxy.log">UDP Proxy</option>
