@@ -891,8 +891,8 @@
 
                     <div class="form-group">
                         <label for="VIDEO_FPS">Кадрів на секунду (FPS)</label>
-                        <span class="help-text">Рекомендація Delta: ≤24. Нижче = менше трафіку, менш плавне відео</span>
-                        <input type="number" id="VIDEO_FPS" name="VIDEO_FPS" value="24" min="10" max="24">
+                        <span class="help-text">Рекомендація Delta: ≤24. VRX видає 25 — встановіть 25, щоб уникнути викидання кадрів (плавніше відео). Нижче = менше трафіку</span>
+                        <input type="number" id="VIDEO_FPS" name="VIDEO_FPS" value="24" min="10" max="25">
                     </div>
 
                     <details style="margin-top: 16px;">
@@ -1044,6 +1044,9 @@ VIDEO_BITRATE=2000k"></textarea>
                     </button>
                     <button type="button" class="btn btn-secondary" onclick="analyzeLogs()" style="flex: none; padding: 8px 16px; background: #6c757d; color: white;">
                         🔍 Аналізувати
+                    </button>
+                    <button type="button" class="btn" onclick="clearLog()" style="flex: none; padding: 8px 16px; background: #dc3545; color: white; margin-left: auto;">
+                        🗑️ Очистити
                     </button>
                 </div>
                 <div id="logAnalysis" style="display: none; margin-bottom: 12px; padding: 12px; border-radius: 8px; background: #2d2d2d; border: 1px solid #444;"></div>
@@ -2797,6 +2800,33 @@ VIDEO_BITRATE=2000k"></textarea>
                 viewer.scrollTop = viewer.scrollHeight;
             } catch (err) {
                 viewer.textContent = 'Помилка завантаження: ' + err.message;
+            }
+        }
+
+        async function clearLog() {
+            const file = document.getElementById('logFileSelect').value;
+            if (!confirm(`Очистити файл ${file}? Цю дію не можна скасувати.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/logs/clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: file })
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    showAlert('Помилка очищення: ' + data.error, 'error');
+                    return;
+                }
+
+                showAlert(`Лог ${file} очищено`, 'success');
+                document.getElementById('logAnalysis').style.display = 'none';
+                loadLogs();
+            } catch (err) {
+                showAlert('Помилка очищення: ' + err.message, 'error');
             }
         }
 

@@ -401,7 +401,11 @@ while true; do
         
         # Start debug monitor if enabled
         if [ "$DEBUG_MODE" = "true" ]; then
-            RTMP_HOST_FOR_PING=$(echo "$RTMP_URL" | sed -n 's|rtmp[s]*://\([^/:]*\).*|\1|p')
+            # Delta server blocks ICMP - ping the default gateway (local link health)
+            # and read TCP RTT/retransmits from the actual RTMP connection via ss
+            GW_FOR_PING=$(ip route 2>/dev/null | awk '/^default/ {print $3; exit}')
+            RTMP_PORT_NUM=$(echo "$RTMP_URL" | sed -n 's|rtmp[s]*://[^/:]*:\([0-9]*\)/.*|\1|p')
+            [ -z "$RTMP_PORT_NUM" ] && RTMP_PORT_NUM=1935
             (
             while kill -0 "$FFMPEG_PID" 2>/dev/null; do
                 sleep 5
@@ -441,18 +445,29 @@ while true; do
                 # Peripherals (VRX/capture/RP2040) resetting may indicate power issues
                 USB_DISC=$(dmesg 2>/dev/null | grep -c 'USB disconnect')
 
-                # Network: burst ping (5 probes in 1s) for jitter and loss detection
-                PING_OUT=$(ping -c 5 -i 0.2 -W 2 "$RTMP_HOST_FOR_PING" 2>/dev/null)
-                PING_STATS=$(echo "$PING_OUT" | grep -o 'min/avg/max[^=]*= [0-9./]*' | grep -o '[0-9./]*$')
-                PING_LOSS=$(echo "$PING_OUT" | grep -o '[0-9]*% packet loss' | grep -o '^[0-9]*')
-                if [ -n "$PING_STATS" ]; then
-                    # min/avg/max/mdev -> keep min/avg/max
-                    PING_MS=$(echo "$PING_STATS" | cut -d/ -f1-3)
-                else
-                    PING_MS="timeout"
+                # Local link: burst ping to gateway (5 probes in 1s) for jitter and loss
+                PING_MS="N/A"
+                PING_LOSS="N/A"
+                if [ -n "$GW_FOR_PING" ]; then
+                    PING_OUT=$(ping -c 5 -i 0.2 -W 2 "$GW_FOR_PING" 2>/dev/null)
+                    PING_STATS=$(echo "$PING_OUT" | grep -o 'min/avg/max[^=]*= [0-9./]*' | grep -o '[0-9./]*$')
+                    PING_LOSS=$(echo "$PING_OUT" | grep -o '[0-9]*% packet loss' | grep -o '^[0-9]*')
+                    if [ -n "$PING_STATS" ]; then
+                        # min/avg/max/mdev -> keep min/avg/max
+                        PING_MS=$(echo "$PING_STATS" | cut -d/ -f1-3)
+                    else
+                        PING_MS="timeout"
+                    fi
+                    [ -z "$PING_LOSS" ] && PING_LOSS="100"
                 fi
-                [ -z "$PING_LOSS" ] && PING_LOSS="100"
-                RETRANS=$(ss -ti 2>/dev/null | grep -o "retrans:[0-9]*" | head -1 | cut -d: -f2 || echo "0")
+
+                # RTMP connection health: TCP RTT and total retransmits from ss
+                # retrans:X/Y -> Y is total; pattern with "/" avoids matching bytes_retrans
+                SS_INFO=$(ss -tin "dport = :${RTMP_PORT_NUM}" 2>/dev/null)
+                TCP_RTT=$(echo "$SS_INFO" | grep -o 'rtt:[0-9.]*' | head -1 | cut -d: -f2)
+                RETRANS=$(echo "$SS_INFO" | grep -o 'retrans:[0-9]*/[0-9]*' | head -1 | cut -d/ -f2)
+                [ -z "$TCP_RTT" ] && TCP_RTT="N/A"
+                [ -z "$RETRANS" ] && RETRANS="0"
 
                 # FFmpeg stats from debug_raw.log (speed, fps, drop)
                 # ffmpeg separates progress lines with \r and pads numbers (e.g. "fps= 24")
@@ -460,7 +475,7 @@ while true; do
                 FFMPEG_FPS="N/A"
                 FFMPEG_DROP="N/A"
                 if [ -f "$DEBUG_RAW_FILE" ]; then
-                    LAST_STATS=$(tail -c 2048 "$DEBUG_RAW_FILE" 2>/dev/null | tr '\r' '\n' | tail -n 5)
+                    LAST_STATS=$(tail -c 8192 "$DEBUG_RAW_FILE" 2>/dev/null | tr '\r' '\n' | grep 'speed=' | tail -n 3)
                     SPEED_VAL=$(echo "$LAST_STATS" | grep -o 'speed= *[0-9.]*x' | tail -1 | grep -o '[0-9.]*x')
                     FPS_VAL=$(echo "$LAST_STATS" | grep -o 'fps= *[0-9.]*' | tail -1 | grep -o '[0-9.]*$')
                     DROP_VAL=$(echo "$LAST_STATS" | grep -o 'drop= *[0-9]*' | tail -1 | grep -o '[0-9]*$')
@@ -469,7 +484,7 @@ while true; do
                     [ -n "$DROP_VAL" ] && FFMPEG_DROP="$DROP_VAL"
                 fi
 
-                debug_log "[METRIC] cpu_ffmpeg=${CPU_FFMPEG}% load=${LOAD_AVG} temp=${CPU_TEMP}°C mem=${MEM_FREE}MB pwr=${PWR_STATUS} volt=${CORE_VOLT}V usb_disc=${USB_DISC} ping=${PING_MS}ms loss=${PING_LOSS}% retrans=${RETRANS} speed=${FFMPEG_SPEED} fps=${FFMPEG_FPS} drop=${FFMPEG_DROP}"
+                debug_log "[METRIC] cpu_ffmpeg=${CPU_FFMPEG}% load=${LOAD_AVG} temp=${CPU_TEMP}°C mem=${MEM_FREE}MB pwr=${PWR_STATUS} volt=${CORE_VOLT}V usb_disc=${USB_DISC} gw_ping=${PING_MS}ms gw_loss=${PING_LOSS}% rtt=${TCP_RTT}ms retrans=${RETRANS} speed=${FFMPEG_SPEED} fps=${FFMPEG_FPS} drop=${FFMPEG_DROP}"
             done
             ) &
             DEBUG_MON_PID=$!

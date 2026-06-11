@@ -1140,6 +1140,36 @@ def get_logs():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/logs/clear', methods=['POST'])
+def clear_log():
+    """API endpoint to clear a log file (truncate to empty)."""
+    try:
+        data = request.json or {}
+        log_file = data.get('file', '')
+
+        # Security: only allow specific log files
+        if log_file not in ALLOWED_LOGS:
+            return jsonify({'error': 'Invalid log file'}), 400
+
+        log_path = LOGS_DIR / log_file
+        if not log_path.exists():
+            return jsonify({'success': True, 'message': 'Log file does not exist'})
+
+        with open(log_path, 'w'):
+            pass
+
+        # Also clear companion raw file when clearing debug log
+        if log_file == 'debug.log':
+            raw_path = LOGS_DIR / 'debug_raw.log'
+            if raw_path.exists():
+                with open(raw_path, 'w'):
+                    pass
+
+        return jsonify({'success': True, 'message': f'{log_file} cleared'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/logs/analyze', methods=['GET'])
 def analyze_logs():
     """Analyze debug.log and return summary of issues."""
@@ -1165,53 +1195,74 @@ def analyze_logs():
                 match = re.search(r'cpu_ffmpeg=([0-9]+)', line)
                 if match:
                     cpu_values.append(int(match.group(1)))
-            if cpu_values and sum(cpu_values) / len(cpu_values) > 80:
+            # top reports % of a single core; multicore encode legitimately exceeds 100%
+            # Pi 4 has 4 cores (400% max) — sustained >250% means near saturation
+            if cpu_values and sum(cpu_values) / len(cpu_values) > 250:
                 issues.append({
                     'type': 'cpu',
                     'severity': 'high',
-                    'message': 'Average ffmpeg CPU > 80% — system overloaded',
+                    'message': 'Average ffmpeg CPU > 250% (of 400% on 4 cores) — encoder near saturation',
                     'hint': 'Reduce VIDEO_BITRATE, VIDEO_FPS, or disable overlays'
                 })
 
-        # Network check
-        timeouts = [l for l in lines if '[METRIC]' in l and 'ping=timeout' in l]
+        # Local link check (ping to default gateway)
+        timeouts = [l for l in lines if '[METRIC]' in l and 'gw_ping=timeout' in l]
         if len(timeouts) > 3:
             issues.append({
                 'type': 'network',
                 'severity': 'high',
-                'message': f'{len(timeouts)} ping timeouts — unstable network (possible Starlink handoff)',
-                'hint': 'Check Starlink connection stability'
+                'message': f'{len(timeouts)} gateway ping timeouts — local link unstable (PoE cable / router)',
+                'hint': 'Check PoE cable and local network equipment'
             })
 
-        # Ping packet loss (partial loss within burst)
-        loss_lines = [l for l in lines if '[METRIC]' in l and 'loss=' in l]
+        # Gateway ping packet loss (partial loss within burst)
+        loss_lines = [l for l in lines if '[METRIC]' in l and 'gw_loss=' in l]
         if loss_lines:
             loss_events = 0
             for line in loss_lines[-50:]:
-                match = re.search(r'loss=([0-9]+)%', line)
+                match = re.search(r'gw_loss=([0-9]+)%', line)
                 if match and 0 < int(match.group(1)) < 100:
                     loss_events += 1
             if loss_events > 3:
                 issues.append({
                     'type': 'network',
                     'severity': 'medium',
-                    'message': f'Partial ping loss in {loss_events} samples — network jitter/micro-outages',
-                    'hint': 'Typical for Starlink handoffs. If frequent, check dish placement and obstructions'
+                    'message': f'Partial packet loss to gateway in {loss_events} samples — local link jitter',
+                    'hint': 'Check PoE cable quality and length, possible electrical interference'
                 })
 
-        # Packet loss
-        retrans_lines = [l for l in lines if '[METRIC]' in l and 'retrans=' in l]
-        if retrans_lines:
-            retrans_values = []
-            for line in retrans_lines[-20:]:
-                match = re.search(r'retrans=([0-9]+)', line)
+        # TCP RTT to RTMP server (real connection latency, works even if ICMP is blocked)
+        rtt_lines = [l for l in lines if '[METRIC]' in l and 'rtt=' in l and 'rtt=N/A' not in l]
+        if rtt_lines:
+            rtt_values = []
+            for line in rtt_lines[-20:]:
+                match = re.search(r'rtt=([0-9.]+)ms', line)
                 if match:
-                    retrans_values.append(int(match.group(1)))
-            if retrans_values and max(retrans_values) > 0:
+                    try:
+                        rtt_values.append(float(match.group(1)))
+                    except ValueError:
+                        pass
+            if rtt_values and sum(rtt_values) / len(rtt_values) > 500:
                 issues.append({
                     'type': 'network',
                     'severity': 'medium',
-                    'message': 'TCP retransmits detected — packet loss on uplink',
+                    'message': f'High TCP RTT to RTMP server (avg {sum(rtt_values)/len(rtt_values):.0f}ms)',
+                    'hint': 'Slow uplink (Starlink congestion?). Stream latency will be high'
+                })
+
+        # Packet loss: retrans is a cumulative counter — only growth matters
+        retrans_lines = [l for l in lines if '[METRIC]' in l and 'retrans=' in l]
+        if retrans_lines:
+            retrans_values = []
+            for line in retrans_lines[-50:]:
+                match = re.search(r'retrans=([0-9]+)', line)
+                if match:
+                    retrans_values.append(int(match.group(1)))
+            if len(retrans_values) >= 2 and retrans_values[-1] - retrans_values[0] > 10:
+                issues.append({
+                    'type': 'network',
+                    'severity': 'medium',
+                    'message': f'{retrans_values[-1] - retrans_values[0]} new TCP retransmits during monitoring — packet loss on uplink',
                     'hint': 'Network congestion or Starlink handoff'
                 })
 
@@ -1243,15 +1294,21 @@ def analyze_logs():
                 match = re.search(r'drop=([0-9]+)', line)
                 if match:
                     drop_values.append(int(match.group(1)))
-            # drop is a cumulative counter within one ffmpeg session — use max
-            if drop_values and max(drop_values) > 0:
-                total_dropped = max(drop_values)
-                issues.append({
-                    'type': 'encoding',
-                    'severity': 'high',
-                    'message': f'{total_dropped} frames dropped — video quality degradation',
-                    'hint': 'CPU cannot process frames fast enough. Lower bitrate/FPS or disable overlays'
-                })
+            # drop is cumulative; steady slow growth is normal fps conversion
+            # (input ~25fps -> output 24fps drops ~1 frame/s by design).
+            # Only flag if drop rate is clearly above fps-conversion rate (>3/s).
+            if len(drop_values) >= 2:
+                drop_growth = drop_values[-1] - drop_values[0]
+                # samples are ~8s apart
+                time_span = (len(drop_values) - 1) * 8
+                drop_rate = drop_growth / time_span if time_span > 0 else 0
+                if drop_rate > 3:
+                    issues.append({
+                        'type': 'encoding',
+                        'severity': 'high',
+                        'message': f'High frame drop rate ({drop_rate:.1f}/s) — encoder cannot keep up',
+                        'hint': 'CPU overload. Lower bitrate/FPS or disable overlays. Note: ~1 drop/s is normal fps conversion (25->24)'
+                    })
 
         # USB disconnects (peripherals resetting — power or cable issues)
         usb_lines = [l for l in lines if '[METRIC]' in l and 'usb_disc=' in l]
