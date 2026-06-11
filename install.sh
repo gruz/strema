@@ -224,6 +224,21 @@ else
     echo "✅ Download complete"
 fi
 
+# Create/update VERSION file (not tracked in git, so must be generated)
+if [ "$VERSION" = "master" ]; then
+    echo "master" > "$INSTALL_DIR/VERSION"
+elif [ "$VERSION" = "latest" ]; then
+    LATEST_TAG=$(get_latest_release)
+    if [ -n "$LATEST_TAG" ]; then
+        echo "${LATEST_TAG#v}" > "$INSTALL_DIR/VERSION"
+    else
+        echo "master" > "$INSTALL_DIR/VERSION"
+    fi
+else
+    # Specific version like v0.1.0 - strip 'v' prefix
+    echo "${VERSION#v}" > "$INSTALL_DIR/VERSION"
+fi
+
 SCRIPT_DIR="$INSTALL_DIR"
 
 # Install dependencies (requires sudo)

@@ -108,7 +108,7 @@ COMBINED_RELEASES=$(echo "$MASTER_ENTRY $RELEASES_JSON" | jq -s 'add')
 
 # Check if update available (comparing with latest release, not master)
 HAS_UPDATE=false
-if [ -n "$LATEST" ] && [ "$LATEST" != "v$CURRENT_VERSION" ]; then
+if [ -n "$LATEST" ] && [ "$CURRENT_VERSION" != "master" ] && [ "$LATEST" != "v$CURRENT_VERSION" ]; then
     HAS_UPDATE=true
 fi
 
