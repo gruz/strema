@@ -880,8 +880,13 @@
 
                     <div class="form-group">
                         <label for="VIDEO_BITRATE">Бітрейт відео</label>
-                        <span class="help-text">Рекомендація Delta: ≤2500k. Приклади: 1500k, 1800k, 2000k, 2500k</span>
-                        <input type="text" id="VIDEO_BITRATE" name="VIDEO_BITRATE" value="2000k" pattern="[0-9]+k">
+                        <span class="help-text">Рекомендація Delta: ≤2500k</span>
+                        <select id="VIDEO_BITRATE" name="VIDEO_BITRATE">
+                            <option value="1500k">1500k</option>
+                            <option value="1800k">1800k</option>
+                            <option value="2000k" selected>2000k</option>
+                            <option value="2500k">2500k</option>
+                        </select>
                     </div>
 
                     <div class="form-group">
