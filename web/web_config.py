@@ -1155,15 +1155,22 @@ def clear_log():
         if not log_path.exists():
             return jsonify({'success': True, 'message': 'Log file does not exist'})
 
-        with open(log_path, 'w'):
-            pass
+        # Log files are owned by root - truncate via sudo
+        result = subprocess.run(
+            ['sudo', 'truncate', '-s', '0', str(log_path)],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0:
+            return jsonify({'error': f'Failed to clear log: {result.stderr}'}), 500
 
         # Also clear companion raw file when clearing debug log
         if log_file == 'debug.log':
             raw_path = LOGS_DIR / 'debug_raw.log'
             if raw_path.exists():
-                with open(raw_path, 'w'):
-                    pass
+                subprocess.run(
+                    ['sudo', 'truncate', '-s', '0', str(raw_path)],
+                    capture_output=True, text=True, timeout=10
+                )
 
         return jsonify({'success': True, 'message': f'{log_file} cleared'})
     except Exception as e:
