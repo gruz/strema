@@ -892,7 +892,7 @@
                     <div class="form-group">
                         <label for="VIDEO_FPS">Кадрів на секунду (FPS)</label>
                         <span class="help-text">Рекомендація Delta: ≤24. VRX видає 25 — встановіть 25, щоб уникнути викидання кадрів (плавніше відео). Нижче = менше трафіку</span>
-                        <input type="number" id="VIDEO_FPS" name="VIDEO_FPS" value="24" min="10" max="25">
+                        <input type="number" id="VIDEO_FPS" name="VIDEO_FPS" value="25" min="10" max="25">
                     </div>
 
                     <details style="margin-top: 16px;">
@@ -1042,6 +1042,14 @@ VIDEO_BITRATE=2000k"></textarea>
                     <button type="button" class="btn btn-primary" onclick="loadLogs()" style="flex: none; padding: 8px 16px;">
                         🔄 Оновити
                     </button>
+                    <select id="analyzePeriod" style="padding: 8px; border-radius: 6px; border: 1px solid #e0e0e0; font-size: 14px;">
+                        <option value="0">Всі доступні логи</option>
+                        <option value="1">Остання година</option>
+                        <option value="3">Останні 3 години</option>
+                        <option value="6">Останні 6 годин</option>
+                        <option value="12">Останні 12 годин</option>
+                        <option value="24">Останні 24 години</option>
+                    </select>
                     <button type="button" class="btn btn-secondary" onclick="analyzeLogs()" style="flex: none; padding: 8px 16px; background: #6c757d; color: white;">
                         🔍 Аналізувати
                     </button>
@@ -2836,7 +2844,8 @@ VIDEO_BITRATE=2000k"></textarea>
             analysisDiv.innerHTML = '<div style="color: #999;">Аналіз...</div>';
 
             try {
-                const response = await fetch('/api/logs/analyze');
+                const hours = document.getElementById('analyzePeriod').value;
+                const response = await fetch(`/api/logs/analyze?hours=${hours}`);
                 const data = await response.json();
 
                 if (data.error) {

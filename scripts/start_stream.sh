@@ -409,7 +409,13 @@ while true; do
             (
             while kill -0 "$FFMPEG_PID" 2>/dev/null; do
                 sleep 5
-                CPU_FFMPEG=$(top -b -n1 -p "$FFMPEG_PID" 2>/dev/null | tail -1 | awk '{print $9}' | cut -d. -f1)
+                CPU_RAW=$(top -b -n1 -p "$FFMPEG_PID" 2>/dev/null | tail -1 | awk '{print $9}' | cut -d. -f1)
+                # top may output header/footer when process dies - validate numeric
+                if echo "$CPU_RAW" | grep -qE '^[0-9]+$'; then
+                    CPU_FFMPEG="$CPU_RAW"
+                else
+                    CPU_FFMPEG="N/A"
+                fi
                 LOAD_AVG=$(cut -d' ' -f1 /proc/loadavg)
 
                 # CPU temperature

@@ -1185,32 +1185,73 @@ def analyze_logs():
         if not log_path.exists():
             return jsonify({'issues': [], 'recommendation': 'Debug log not found. Enable DEBUG_MODE first.'})
 
-        result = subprocess.run(
-            ['tail', '-n', '500', str(log_path)],
-            capture_output=True,
-            text=True
-        )
-        lines = result.stdout.strip().split('\n') if result.stdout.strip() else []
+        # Parse optional hours filter
+        hours = request.args.get('hours', '0')
+        try:
+            hours = int(hours)
+        except ValueError:
+            hours = 0
+
+        # Analyze full history: rotated .old file first, then current log
+        lines = []
+        old_path = LOGS_DIR / 'debug.log.old'
+        for path in (old_path, log_path):
+            if path.exists():
+                with open(path, 'r', errors='replace') as f:
+                    lines.extend(f.read().splitlines())
+
+        # Filter by time window if requested (hours > 0)
+        if hours > 0:
+            ts_re = re.compile(r'^\[([0-9-]+ [0-9:]+)\]')
+            last_ts = None
+            for line in reversed(lines):
+                m = ts_re.match(line)
+                if m:
+                    last_ts = datetime.datetime.strptime(m.group(1), '%Y-%m-%d %H:%M:%S')
+                    break
+            if last_ts:
+                cutoff = last_ts - datetime.timedelta(hours=hours)
+                filtered = []
+                for line in lines:
+                    m = ts_re.match(line)
+                    if m:
+                        try:
+                            ts = datetime.datetime.strptime(m.group(1), '%Y-%m-%d %H:%M:%S')
+                            if ts >= cutoff:
+                                filtered.append(line)
+                        except ValueError:
+                            pass
+                    else:
+                        filtered.append(line)
+                lines = filtered
+
+        def counter_growth(values):
+            """Sum of positive deltas. Cumulative counters (retrans, drop) reset
+            on reconnect/session restart, so a plain last-first is wrong."""
+            return sum(max(0, b - a) for a, b in zip(values, values[1:]))
 
         issues = []
 
-        # CPU check
+        # CPU check: count saturated samples over the whole period
+        # (a global average would hide hours-long overload episodes)
         cpu_lines = [l for l in lines if '[METRIC]' in l and 'cpu_ffmpeg=' in l]
         if cpu_lines:
             cpu_values = []
-            for line in cpu_lines[-20:]:
+            for line in cpu_lines:
                 match = re.search(r'cpu_ffmpeg=([0-9]+)', line)
                 if match:
                     cpu_values.append(int(match.group(1)))
             # top reports % of a single core; multicore encode legitimately exceeds 100%
             # Pi 4 has 4 cores (400% max) — sustained >250% means near saturation
-            if cpu_values and sum(cpu_values) / len(cpu_values) > 250:
-                issues.append({
-                    'type': 'cpu',
-                    'severity': 'high',
-                    'message': 'Average ffmpeg CPU > 250% (of 400% on 4 cores) — encoder near saturation',
-                    'hint': 'Reduce VIDEO_BITRATE, VIDEO_FPS, or disable overlays'
-                })
+            if cpu_values:
+                saturated = sum(1 for v in cpu_values if v > 250)
+                if saturated > len(cpu_values) * 0.1 and saturated > 5:
+                    issues.append({
+                        'type': 'cpu',
+                        'severity': 'high',
+                        'message': f'ffmpeg CPU > 250% (of 400% on 4 cores) in {saturated}/{len(cpu_values)} samples — encoder near saturation',
+                        'hint': 'Reduce VIDEO_BITRATE, VIDEO_FPS, or disable overlays'
+                    })
 
         # Local link check (ping to default gateway)
         timeouts = [l for l in lines if '[METRIC]' in l and 'gw_ping=timeout' in l]
@@ -1226,7 +1267,7 @@ def analyze_logs():
         loss_lines = [l for l in lines if '[METRIC]' in l and 'gw_loss=' in l]
         if loss_lines:
             loss_events = 0
-            for line in loss_lines[-50:]:
+            for line in loss_lines:
                 match = re.search(r'gw_loss=([0-9]+)%', line)
                 if match and 0 < int(match.group(1)) < 100:
                     loss_events += 1
@@ -1242,42 +1283,45 @@ def analyze_logs():
         rtt_lines = [l for l in lines if '[METRIC]' in l and 'rtt=' in l and 'rtt=N/A' not in l]
         if rtt_lines:
             rtt_values = []
-            for line in rtt_lines[-20:]:
+            for line in rtt_lines:
                 match = re.search(r'rtt=([0-9.]+)ms', line)
                 if match:
                     try:
                         rtt_values.append(float(match.group(1)))
                     except ValueError:
                         pass
-            if rtt_values and sum(rtt_values) / len(rtt_values) > 500:
-                issues.append({
-                    'type': 'network',
-                    'severity': 'medium',
-                    'message': f'High TCP RTT to RTMP server (avg {sum(rtt_values)/len(rtt_values):.0f}ms)',
-                    'hint': 'Slow uplink (Starlink congestion?). Stream latency will be high'
-                })
+            if rtt_values:
+                high_rtt = sum(1 for v in rtt_values if v > 500)
+                if high_rtt > len(rtt_values) * 0.1 and high_rtt > 5:
+                    issues.append({
+                        'type': 'network',
+                        'severity': 'medium',
+                        'message': f'High TCP RTT (>500ms) to RTMP server in {high_rtt}/{len(rtt_values)} samples',
+                        'hint': 'Slow uplink (Starlink congestion?). Stream latency will be high'
+                    })
 
-        # Packet loss: retrans is a cumulative counter — only growth matters
+        # Packet loss: retrans is a cumulative counter (resets per connection) — sum growth
         retrans_lines = [l for l in lines if '[METRIC]' in l and 'retrans=' in l]
         if retrans_lines:
             retrans_values = []
-            for line in retrans_lines[-50:]:
+            for line in retrans_lines:
                 match = re.search(r'retrans=([0-9]+)', line)
                 if match:
                     retrans_values.append(int(match.group(1)))
-            if len(retrans_values) >= 2 and retrans_values[-1] - retrans_values[0] > 10:
+            retrans_total = counter_growth(retrans_values)
+            if retrans_total > 50:
                 issues.append({
                     'type': 'network',
                     'severity': 'medium',
-                    'message': f'{retrans_values[-1] - retrans_values[0]} new TCP retransmits during monitoring — packet loss on uplink',
+                    'message': f'{retrans_total} TCP retransmits over the monitored period — packet loss on uplink',
                     'hint': 'Network congestion or Starlink handoff'
                 })
 
-        # Encoding speed (lag detection)
+        # Encoding speed (lag detection): count slow samples over whole period
         speed_lines = [l for l in lines if '[METRIC]' in l and 'speed=' in l and 'N/A' not in l]
         if speed_lines:
             speed_values = []
-            for line in speed_lines[-20:]:
+            for line in speed_lines:
                 match = re.search(r'speed=([0-9.]+)x', line)
                 if match:
                     try:
@@ -1285,35 +1329,36 @@ def analyze_logs():
                         speed_values.append(speed)
                     except ValueError:
                         pass
-            if speed_values and sum(speed_values) / len(speed_values) < 1.0:
-                issues.append({
-                    'type': 'encoding',
-                    'severity': 'high',
-                    'message': 'Encoding speed < 1.0x — cannot keep up with real-time',
-                    'hint': 'Lower VIDEO_BITRATE or VIDEO_FPS, disable overlays, or check CPU throttling'
-                })
+            if speed_values:
+                slow = sum(1 for v in speed_values if v < 0.95)
+                if slow > len(speed_values) * 0.1 and slow > 5:
+                    issues.append({
+                        'type': 'encoding',
+                        'severity': 'high',
+                        'message': f'Encoding speed < 0.95x in {slow}/{len(speed_values)} samples — cannot keep up with real-time',
+                        'hint': 'Lower VIDEO_BITRATE or VIDEO_FPS, disable overlays, or check CPU throttling'
+                    })
 
         # Dropped frames
         drop_lines = [l for l in lines if '[METRIC]' in l and 'drop=' in l and 'N/A' not in l]
         if drop_lines:
             drop_values = []
-            for line in drop_lines[-20:]:
+            for line in drop_lines:
                 match = re.search(r'drop=([0-9]+)', line)
                 if match:
                     drop_values.append(int(match.group(1)))
-            # drop is cumulative; steady slow growth is normal fps conversion
-            # (input ~25fps -> output 24fps drops ~1 frame/s by design).
-            # Only flag if drop rate is clearly above fps-conversion rate (>3/s).
+            # drop is cumulative per ffmpeg session; steady slow growth is normal
+            # fps conversion (input ~25fps -> output 24fps drops ~1 frame/s by design).
+            # Count intervals where drop rate is clearly above conversion rate (>3/s,
+            # samples are ~8s apart -> >24 drops per interval).
             if len(drop_values) >= 2:
-                drop_growth = drop_values[-1] - drop_values[0]
-                # samples are ~8s apart
-                time_span = (len(drop_values) - 1) * 8
-                drop_rate = drop_growth / time_span if time_span > 0 else 0
-                if drop_rate > 3:
+                deltas = [b - a for a, b in zip(drop_values, drop_values[1:])]
+                bad_intervals = sum(1 for d in deltas if d > 24)
+                if bad_intervals > len(deltas) * 0.1 and bad_intervals > 5:
                     issues.append({
                         'type': 'encoding',
                         'severity': 'high',
-                        'message': f'High frame drop rate ({drop_rate:.1f}/s) — encoder cannot keep up',
+                        'message': f'High frame drop rate (>3/s) in {bad_intervals}/{len(deltas)} intervals — encoder cannot keep up',
                         'hint': 'CPU overload. Lower bitrate/FPS or disable overlays. Note: ~1 drop/s is normal fps conversion (25->24)'
                     })
 
@@ -1325,8 +1370,9 @@ def analyze_logs():
                 match = re.search(r'usb_disc=([0-9]+)', line)
                 if match:
                     usb_values.append(int(match.group(1)))
-            if len(usb_values) >= 2 and usb_values[-1] > usb_values[0]:
-                new_disconnects = usb_values[-1] - usb_values[0]
+            # usb_disc is cumulative since boot but resets on reboot — sum growth
+            new_disconnects = counter_growth(usb_values)
+            if new_disconnects > 0:
                 issues.append({
                     'type': 'power',
                     'severity': 'high',
@@ -1356,7 +1402,7 @@ def analyze_logs():
         temp_lines = [l for l in lines if '[METRIC]' in l and 'temp=' in l and 'N/A' not in l]
         if temp_lines:
             temp_values = []
-            for line in temp_lines[-20:]:
+            for line in temp_lines:
                 match = re.search(r'temp=([0-9.]+)', line)
                 if match:
                     try:
@@ -1375,7 +1421,7 @@ def analyze_logs():
         mem_lines = [l for l in lines if '[METRIC]' in l and 'mem=' in l and 'N/A' not in l]
         if mem_lines:
             mem_values = []
-            for line in mem_lines[-20:]:
+            for line in mem_lines:
                 match = re.search(r'mem=([0-9]+)', line)
                 if match:
                     mem_values.append(int(match.group(1)))
@@ -1387,20 +1433,38 @@ def analyze_logs():
                     'hint': 'Check for memory leaks. Restarting services may help temporarily'
                 })
 
-        # Disconnections
+        # Disconnections (any disconnect is noteworthy)
         disconnects = [l for l in lines if '[EVENT]' in l and 'disconnected' in l]
-        if len(disconnects) > 3:
+        if len(disconnects) > 0:
             issues.append({
                 'type': 'stream',
                 'severity': 'medium',
-                'message': f'{len(disconnects)} stream disconnections',
-                'hint': 'Check network stability or RTMP server health'
+                'message': f'{len(disconnects)} stream disconnection(s)',
+                'hint': 'Check network stability, RTMP server health, or ffmpeg crash (see [FFMPEG] lines before disconnect)'
             })
+
+        # FFMPEG timestamp drift warnings (accumulated frame dropping causes playback issues)
+        past_duration = [l for l in lines if '[FFMPEG]' in l and 'Past duration' in l]
+        if len(past_duration) > 10:
+            issues.append({
+                'type': 'encoding',
+                'severity': 'medium',
+                'message': f'{len(past_duration)} "Past duration too large" warnings from ffmpeg',
+                'hint': 'Timestamp drift from frame dropping. Set VIDEO_FPS=25 to match VRX output, or check CPU load causing lag'
+            })
+
+        # Determine analyzed period from first/last timestamps
+        period = ''
+        ts_re = re.compile(r'^\[([0-9-]+ [0-9:]+)\]')
+        first_ts = next((m.group(1) for l in lines if (m := ts_re.match(l))), None)
+        last_ts = next((m.group(1) for l in reversed(lines) if (m := ts_re.match(l))), None)
+        if first_ts and last_ts:
+            period = f' (analyzed period: {first_ts} — {last_ts})'
 
         if not issues:
             return jsonify({
                 'issues': [],
-                'recommendation': 'No issues detected. Stream appears healthy.'
+                'recommendation': f'No issues detected. Stream appears healthy.{period}'
             })
 
         recommendations = []
@@ -1419,7 +1483,7 @@ def analyze_logs():
 
         return jsonify({
             'issues': issues,
-            'recommendation': ' \u2022 '.join(recommendations)
+            'recommendation': ' \u2022 '.join(recommendations) + period
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
