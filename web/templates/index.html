@@ -1029,7 +1029,12 @@ VIDEO_BITRATE=2000k"></textarea>
 
             <!-- Logs Tab Content -->
             <div id="logsTabContent" class="tab-content" style="display: none;">
-                <div class="section-title">📋 Логи системи</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div class="section-title" style="margin-bottom: 0;">📋 Логи системи</div>
+                    <button type="button" class="btn" onclick="clearAllLogs()" style="padding: 6px 12px; background: #c82333; color: white; font-size: 13px;">
+                        🗑️ Очистити всі
+                    </button>
+                </div>
                 <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
                     <select id="logFileSelect" onchange="loadLogs()" style="padding: 8px; border-radius: 6px; border: 1px solid #e0e0e0; font-size: 14px;">
                         <option value="stream.log">Лог стріму</option>
@@ -1055,9 +1060,6 @@ VIDEO_BITRATE=2000k"></textarea>
                     </button>
                     <button type="button" class="btn" onclick="clearLog()" style="flex: none; padding: 8px 16px; background: #dc3545; color: white; margin-left: auto;">
                         🗑️ Очистити
-                    </button>
-                    <button type="button" class="btn" onclick="clearAllLogs()" style="flex: none; padding: 8px 16px; background: #c82333; color: white;">
-                        🗑️ Очистити всі
                     </button>
                 </div>
                 <div id="logAnalysis" style="display: none; margin-bottom: 12px; padding: 12px; border-radius: 8px; background: #2d2d2d; border: 1px solid #444;"></div>
