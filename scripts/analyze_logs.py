@@ -124,7 +124,7 @@ def analyze_logs(log_dir, hours=0):
                     'type': 'network',
                     'severity': 'medium',
                     'message': f'Високий TCP RTT (>500 мс) до RTMP-сервера у {high_rtt}/{len(rtt_values)} вимірах',
-                    'hint': 'Повільний uplink (перевантаження Starlink?). Затримка стріму буде високою'
+                    'hint': 'Повільний uplink. Затримка стріму буде високою'
                 })
 
     # Packet loss: retrans is a cumulative counter (resets per connection) — sum growth
@@ -141,7 +141,7 @@ def analyze_logs(log_dir, hours=0):
                 'type': 'network',
                 'severity': 'medium',
                 'message': f'{retrans_total} TCP-ретрансмісій за період моніторингу — втрата пакетів на uplink',
-                'hint': 'Перевантаження мережі або хендовер Starlink'
+                'hint': 'Перевантаження мережі або хендовер/переключення базової станції'
             })
 
     # Encoding speed (lag detection): count slow samples over whole period
@@ -321,7 +321,7 @@ def analyze_logs(log_dir, hours=0):
     if any(i['type'] == 'memory' for i in issues):
         recommendations.append('Перевірте на витоки пам\'яті та перезапустіть сервіси за потреби')
     if any(i['type'] == 'network' for i in issues):
-        recommendations.append('Перевірте стабільність мережі (хендовери Starlink можуть спричиняти тимчасові проблеми)')
+        recommendations.append('Перевірте стабільність мережі (хендовери/переключення базових станцій можуть спричиняти тимчасові проблеми)')
     if any(i['type'] == 'stream' for i in issues):
         recommendations.append('Моніторте доступність RTMP-сервера')
 
