@@ -340,6 +340,7 @@ fi
 # Auto-reconnect loop (watchdog service handles service restarts)
 RECONNECT_DELAY=2
 CHECK_INTERVAL=5
+METRIC_INTERVAL=2  # how often to collect debug metrics (faster than scan check)
 
 while true; do
     LAST_FFMPEG_EXIT=""
@@ -413,7 +414,7 @@ while true; do
             [ -z "$RTMP_PORT_NUM" ] && RTMP_PORT_NUM=1935
             (
             while kill -0 "$FFMPEG_PID" 2>/dev/null; do
-                sleep 5
+                sleep $METRIC_INTERVAL
                 CPU_RAW=$(top -b -n1 -p "$FFMPEG_PID" 2>/dev/null | tail -1 | awk '{print $9}' | cut -d. -f1)
                 # top may output header/footer when process dies - validate numeric
                 if echo "$CPU_RAW" | grep -qE '^[0-9]+$'; then
@@ -456,6 +457,12 @@ while true; do
                 # Peripherals (VRX/capture/RP2040) resetting may indicate power issues
                 USB_DISC=$(dmesg 2>/dev/null | grep -c 'USB disconnect')
 
+                # Key peripheral presence and USB power health
+                USB_DEVS=$(lsusb 2>/dev/null | wc -l)
+                VIDEO_DEV=$(ls /dev/video* 2>/dev/null | wc -l)
+                TTYACM_DEV=$(ls /dev/ttyACM* 2>/dev/null | wc -l)
+                USB_PWR_ERR=$(dmesg 2>/dev/null | grep -ciE 'under-voltage|over-current|not enough power|usb .* power')
+
                 # Local link: burst ping to gateway (5 probes in 1s) for jitter and loss
                 PING_MS="N/A"
                 PING_LOSS="N/A"
@@ -495,7 +502,7 @@ while true; do
                     [ -n "$DROP_VAL" ] && FFMPEG_DROP="$DROP_VAL"
                 fi
 
-                debug_log "[METRIC] cpu_ffmpeg=${CPU_FFMPEG}% load=${LOAD_AVG} temp=${CPU_TEMP}°C mem=${MEM_FREE}MB pwr=${PWR_STATUS} volt=${CORE_VOLT}V usb_disc=${USB_DISC} gw_ping=${PING_MS}ms gw_loss=${PING_LOSS}% rtt=${TCP_RTT}ms retrans=${RETRANS} speed=${FFMPEG_SPEED} fps=${FFMPEG_FPS} drop=${FFMPEG_DROP}"
+                debug_log "[METRIC] cpu_ffmpeg=${CPU_FFMPEG}% load=${LOAD_AVG} temp=${CPU_TEMP}°C mem=${MEM_FREE}MB pwr=${PWR_STATUS} volt=${CORE_VOLT}V usb_disc=${USB_DISC} usb_devs=${USB_DEVS} video_dev=${VIDEO_DEV} ttyacm=${TTYACM_DEV} usb_pwr_err=${USB_PWR_ERR} gw_ping=${PING_MS}ms gw_loss=${PING_LOSS}% rtt=${TCP_RTT}ms retrans=${RETRANS} speed=${FFMPEG_SPEED} fps=${FFMPEG_FPS} drop=${FFMPEG_DROP}"
             done
             ) &
             DEBUG_MON_PID=$!

@@ -202,6 +202,74 @@ def analyze_logs(log_dir, hours=0):
                 'hint': 'Ймовірно проблема з живленням або ослаблений USB-кабель. Перевірте dmesg, щоб визначити, який пристрій перезавантажується'
             })
 
+    # USB device count (sudden drops indicate hub/power issues)
+    usb_dev_lines = [l for l in lines if '[METRIC]' in l and 'usb_devs=' in l]
+    if usb_dev_lines:
+        usb_dev_values = []
+        for line in usb_dev_lines:
+            match = re.search(r'usb_devs=([0-9]+)', line)
+            if match:
+                usb_dev_values.append(int(match.group(1)))
+        if usb_dev_values and len(usb_dev_values) >= 2:
+            drop = max(usb_dev_values) - min(usb_dev_values)
+            if drop >= 2:
+                issues.append({
+                    'type': 'power',
+                    'severity': 'high',
+                    'message': f'USB-пристрої зникали з шини (з {max(usb_dev_values)} до {min(usb_dev_values)}) — проблема живлення/контактів',
+                    'hint': 'Перевірте блок живлення USB-хаба, кабелі, можливе перенавантаження по струму'
+                })
+
+    # Video capture device presence
+    video_dev_lines = [l for l in lines if '[METRIC]' in l and 'video_dev=' in l]
+    if video_dev_lines:
+        video_dev_values = []
+        for line in video_dev_lines:
+            match = re.search(r'video_dev=([0-9]+)', line)
+            if match:
+                video_dev_values.append(int(match.group(1)))
+        if video_dev_values and min(video_dev_values) == 0:
+            issues.append({
+                'type': 'stream',
+                'severity': 'high',
+                'message': 'Плата відеозахоплення пропадала (/dev/video* відсутній) — стрім неможливий',
+                'hint': 'Перевірте USB-кабель плати захоплення, живлення, чи не перегрілась'
+            })
+
+    # RP2040 (Dzyga) presence
+    ttyacm_lines = [l for l in lines if '[METRIC]' in l and 'ttyacm=' in l]
+    if ttyacm_lines:
+        ttyacm_values = []
+        for line in ttyacm_lines:
+            match = re.search(r'ttyacm=([0-9]+)', line)
+            if match:
+                ttyacm_values.append(int(match.group(1)))
+        if ttyacm_values and min(ttyacm_values) == 0:
+            issues.append({
+                'type': 'stream',
+                'severity': 'high',
+                'message': 'RP2040 (Dzyga) пропадав з шини — втрата керування частотою/сканером',
+                'hint': 'Перевірте USB-кабель RP2040, живлення. Можливо, перезавантаження через недостатнє живлення'
+            })
+
+    # USB power errors from dmesg (under-voltage / over-current)
+    usb_pwr_lines = [l for l in lines if '[METRIC]' in l and 'usb_pwr_err=' in l]
+    if usb_pwr_lines:
+        usb_pwr_values = []
+        for line in usb_pwr_lines:
+            match = re.search(r'usb_pwr_err=([0-9]+)', line)
+            if match:
+                usb_pwr_values.append(int(match.group(1)))
+        if usb_pwr_values:
+            pwr_err_total = counter_growth(usb_pwr_values)
+            if pwr_err_total > 0:
+                issues.append({
+                    'type': 'power',
+                    'severity': 'high',
+                    'message': f'{pwr_err_total} помилок живлення USB (under-voltage/over-current)',
+                    'hint': 'USB-пристрої відключаються через перенавантаження. Перевірте блок живлення, PoE-кабель, USB-хаб'
+                })
+
     # Power: undervoltage detection (Raspberry Pi)
     undervolt_now = [l for l in lines if '[METRIC]' in l and 'pwr=UNDERVOLT' in l]
     undervolt_past = [l for l in lines if '[METRIC]' in l and 'pwr=was_bad' in l]
