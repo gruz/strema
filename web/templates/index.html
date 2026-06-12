@@ -1056,6 +1056,9 @@ VIDEO_BITRATE=2000k"></textarea>
                     <button type="button" class="btn" onclick="clearLog()" style="flex: none; padding: 8px 16px; background: #dc3545; color: white; margin-left: auto;">
                         🗑️ Очистити
                     </button>
+                    <button type="button" class="btn" onclick="clearAllLogs()" style="flex: none; padding: 8px 16px; background: #c82333; color: white;">
+                        🗑️ Очистити всі
+                    </button>
                 </div>
                 <div id="logAnalysis" style="display: none; margin-bottom: 12px; padding: 12px; border-radius: 8px; background: #2d2d2d; border: 1px solid #444;"></div>
                 <div id="logViewer" style="background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 12px; max-height: 500px; overflow-y: auto; white-space: pre-wrap;">
@@ -2831,6 +2834,32 @@ VIDEO_BITRATE=2000k"></textarea>
                 }
 
                 showAlert(`Лог ${file} очищено`, 'success');
+                document.getElementById('logAnalysis').style.display = 'none';
+                loadLogs();
+            } catch (err) {
+                showAlert('Помилка очищення: ' + err.message, 'error');
+            }
+        }
+
+        async function clearAllLogs() {
+            if (!confirm('Очистити ВСІ файли логів? Цю дію не можна скасувати.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/logs/clear', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: 'all' })
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    showAlert('Помилка очищення: ' + data.error, 'error');
+                    return;
+                }
+
+                showAlert('Всі логи очищено', 'success');
                 document.getElementById('logAnalysis').style.display = 'none';
                 loadLogs();
             } catch (err) {

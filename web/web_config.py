@@ -1147,6 +1147,29 @@ def clear_log():
         data = request.json or {}
         log_file = data.get('file', '')
 
+        if log_file == 'all':
+            errors = []
+            for lf in ALLOWED_LOGS:
+                log_path = LOGS_DIR / lf
+                if log_path.exists():
+                    result = subprocess.run(
+                        ['sudo', 'truncate', '-s', '0', str(log_path)],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    if result.returncode != 0:
+                        errors.append(f'{lf}: {result.stderr}')
+                # Also clear companion raw file when clearing debug log
+                if lf == 'debug.log':
+                    raw_path = LOGS_DIR / 'debug_raw.log'
+                    if raw_path.exists():
+                        subprocess.run(
+                            ['sudo', 'truncate', '-s', '0', str(raw_path)],
+                            capture_output=True, text=True, timeout=10
+                        )
+            if errors:
+                return jsonify({'error': 'Some logs failed to clear: ' + '; '.join(errors)}), 500
+            return jsonify({'success': True, 'message': 'All logs cleared'})
+
         # Security: only allow specific log files
         if log_file not in ALLOWED_LOGS:
             return jsonify({'error': 'Invalid log file'}), 400
