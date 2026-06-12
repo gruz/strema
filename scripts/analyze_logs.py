@@ -299,23 +299,24 @@ def analyze_logs(log_dir, hours=0):
                     volt_values.append(float(match.group(1)))
                 except ValueError:
                     pass
-        if volt_values and min(volt_values) < 0.87:
+        if volt_values:
             min_volt = min(volt_values)
-            if min_volt < 0.85:
-                severity = 'high'
-                message = f'Напруга ядра критично просіла до {min_volt:.4f}В — ризик нестабільності та тротлінгу'
-            elif undervolt_now or undervolt_past:
-                severity = 'high'
-                message = f'Напруга ядра просіла до {min_volt:.4f}В і зафіксовано тротлінг/undervoltage — живлення недостатнє'
-            else:
-                severity = 'medium'
-                message = f'Напруга ядра просіла до {min_volt:.4f}В (разове просідання, наслідків не виявлено)'
-            issues.append({
-                'type': 'power',
-                'severity': severity,
-                'message': message,
-                'hint': 'Якщо просідання часте або супроводжується лагами — перевірте блок живлення / PoE-кабель / з\'єднання. Pi 4 потребує стабільних 5В 3А'
-            })
+            crit_count = sum(1 for v in volt_values if v < 0.85)
+            low_count = sum(1 for v in volt_values if v < 0.87)
+            if crit_count >= 3 or (len(volt_values) > 100 and crit_count / len(volt_values) > 0.01):
+                issues.append({
+                    'type': 'power',
+                    'severity': 'high',
+                    'message': f'Напруга ядра критично просідала (<0.85В) у {crit_count}/{len(volt_values)} вимірах, мінімум {min_volt:.4f}В',
+                    'hint': 'Постійне недостатнє живлення — ймовірний тротлінг CPU. Перевірте блок живлення / PoE-кабель / з\'єднання'
+                })
+            elif low_count >= 5 or (len(volt_values) > 100 and low_count / len(volt_values) > 0.05):
+                issues.append({
+                    'type': 'power',
+                    'severity': 'medium',
+                    'message': f'Напруга ядра часто просідала (<0.87В) у {low_count}/{len(volt_values)} вимірах, мінімум {min_volt:.4f}В',
+                    'hint': 'Живлення на межі. Якщо супроводжується лагами — перевірте блок живлення / PoE-кабель / з\'єднання'
+                })
 
     # CPU temperature (throttling)
     temp_lines = [l for l in lines if '[METRIC]' in l and 'temp=' in l and 'N/A' not in l]
@@ -343,6 +344,75 @@ def analyze_logs(log_dir, hours=0):
                     'severity': 'medium',
                     'message': f'Температура CPU {max_temp:.1f}°C — наближається до порога термального тротлінгу (80°C)',
                     'hint': 'Перевірте вентилятор охолодження, радіатор, вентиляцію корпусу'
+                })
+
+    # ARM clock frequency (throttling indicator) — per-row correlation
+    metric_rows = [l for l in lines if '[METRIC]' in l]
+    clock_data = []
+    for line in metric_rows:
+        c = re.search(r'arm_clock=([0-9]+)', line)
+        if c:
+            try:
+                clock = int(c.group(1))
+                t = re.search(r'temp=([0-9.]+)', line)
+                temp = float(t.group(1)) if t else None
+                v = re.search(r'volt=([0-9.]+)V', line)
+                volt = float(v.group(1)) if v else None
+                undervolt = 'pwr=UNDERVOLT' in line or 'pwr=was_bad' in line
+                clock_data.append({'clock': clock, 'temp': temp, 'volt': volt, 'undervolt': undervolt})
+            except ValueError:
+                pass
+
+    if clock_data:
+        clocks = [d['clock'] for d in clock_data]
+        min_clock = min(clocks)
+
+        # Filter to rows where clock was actually low for diagnosis
+        low_clock_rows = [d for d in clock_data if d['clock'] < 1200000000]
+        if low_clock_rows:
+            thermal = any(r['temp'] is not None and r['temp'] > 75 for r in low_clock_rows)
+            power = any(r['volt'] is not None and r['volt'] < 0.85 for r in low_clock_rows) or \
+                    any(r['undervolt'] for r in low_clock_rows)
+            if thermal and power:
+                cause = 'термальний тротлінг і недостатнє живлення'
+                hint = 'Одночасно перегрів і просідання живлення. Покращіть охолодження та перевірте блок живлення / PoE-кабель'
+            elif thermal:
+                cause = 'термальний тротлінг (перегрів CPU)'
+                hint = 'Покращіть охолодження — частота знижена через температуру'
+            elif power:
+                cause = 'тротлінг через недостатнє живлення'
+                hint = 'Напруга/живлення недостатні. Перевірте блок живлення / PoE-кабель / з\'єднання'
+            else:
+                cause = 'CPU тротлить (перегрів або недостатнє живлення)'
+                hint = 'Перевірте охолодження, блок живлення / PoE-кабель. Pi 4 має працювати на 1500 МГц'
+            issues.append({
+                'type': 'cpu',
+                'severity': 'high',
+                'message': f'Частота ARM впала до {min_clock/1e6:.0f} МГц — {cause}',
+                'hint': hint
+            })
+        else:
+            # Medium: frequent dips but not severe
+            low_clock_rows = [d for d in clock_data if d['clock'] < 1400000000]
+            low_clock_count = len(low_clock_rows)
+            if low_clock_count > len(clock_data) * 0.05:
+                thermal = any(r['temp'] is not None and r['temp'] > 70 for r in low_clock_rows)
+                power = any(r['volt'] is not None and r['volt'] < 0.87 for r in low_clock_rows) or \
+                        any(r['undervolt'] for r in low_clock_rows)
+                if thermal:
+                    cause = 'ймовірний термальний тротлінг'
+                    hint = 'Температура підвищена — перевірте охолодження'
+                elif power:
+                    cause = 'ймовірний тротлінг через живлення'
+                    hint = 'Просідання напруги — перевірте блок живлення / PoE-кабель'
+                else:
+                    cause = 'можливий тротлінг (перегрів або просідання живлення)'
+                    hint = 'Моніторте температуру та напругу'
+                issues.append({
+                    'type': 'cpu',
+                    'severity': 'medium',
+                    'message': f'Частота ARM знижувалась у {low_clock_count}/{len(clock_data)} вимірах (мінімум {min_clock/1e6:.0f} МГц) — {cause}',
+                    'hint': hint
                 })
 
     # Low memory

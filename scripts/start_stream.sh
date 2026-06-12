@@ -451,6 +451,8 @@ while true; do
                     fi
                     CORE_VOLT=$(vcgencmd measure_volts core 2>/dev/null | grep -o '[0-9.]*' | head -1)
                     [ -z "$CORE_VOLT" ] && CORE_VOLT="N/A"
+                    ARM_CLOCK=$(vcgencmd measure_clock arm 2>/dev/null | cut -d= -f2)
+                    [ -z "$ARM_CLOCK" ] && ARM_CLOCK="N/A"
                 fi
 
                 # USB disconnects since boot (cumulative counter)
@@ -502,7 +504,7 @@ while true; do
                     [ -n "$DROP_VAL" ] && FFMPEG_DROP="$DROP_VAL"
                 fi
 
-                debug_log "[METRIC] cpu_ffmpeg=${CPU_FFMPEG}% load=${LOAD_AVG} temp=${CPU_TEMP}°C mem=${MEM_FREE}MB pwr=${PWR_STATUS} volt=${CORE_VOLT}V usb_disc=${USB_DISC} usb_devs=${USB_DEVS} video_dev=${VIDEO_DEV} ttyacm=${TTYACM_DEV} usb_pwr_err=${USB_PWR_ERR} gw_ping=${PING_MS}ms gw_loss=${PING_LOSS}% rtt=${TCP_RTT}ms retrans=${RETRANS} speed=${FFMPEG_SPEED} fps=${FFMPEG_FPS} drop=${FFMPEG_DROP}"
+                debug_log "[METRIC] cpu_ffmpeg=${CPU_FFMPEG}% load=${LOAD_AVG} temp=${CPU_TEMP}°C mem=${MEM_FREE}MB pwr=${PWR_STATUS} volt=${CORE_VOLT}V arm_clock=${ARM_CLOCK} usb_disc=${USB_DISC} usb_devs=${USB_DEVS} video_dev=${VIDEO_DEV} ttyacm=${TTYACM_DEV} usb_pwr_err=${USB_PWR_ERR} gw_ping=${PING_MS}ms gw_loss=${PING_LOSS}% rtt=${TCP_RTT}ms retrans=${RETRANS} speed=${FFMPEG_SPEED} fps=${FFMPEG_FPS} drop=${FFMPEG_DROP}"
             done
             ) &
             DEBUG_MON_PID=$!
