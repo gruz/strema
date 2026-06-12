@@ -1318,7 +1318,7 @@ def analyze_logs():
                 })
 
         # Encoding speed (lag detection): count slow samples over whole period
-        speed_lines = [l for l in lines if '[METRIC]' in l and 'speed=' in l and 'N/A' not in l]
+        speed_lines = [l for l in lines if '[METRIC]' in l and 'speed=' in l and 'speed=N/A' not in l]
         if speed_lines:
             speed_values = []
             for line in speed_lines:
@@ -1331,16 +1331,16 @@ def analyze_logs():
                         pass
             if speed_values:
                 slow = sum(1 for v in speed_values if v < 0.95)
-                if slow > len(speed_values) * 0.1 and slow > 5:
+                if slow > len(speed_values) * 0.1 and slow > 3:
                     issues.append({
                         'type': 'encoding',
                         'severity': 'high',
                         'message': f'Encoding speed < 0.95x in {slow}/{len(speed_values)} samples — cannot keep up with real-time',
-                        'hint': 'Lower VIDEO_BITRATE or VIDEO_FPS, disable overlays, or check CPU throttling'
+                        'hint': 'Lower VIDEO_BITRATE or VIDEO_FPS, disable overlays, or check CPU throttling (undervoltage/overheating)'
                     })
 
         # Dropped frames
-        drop_lines = [l for l in lines if '[METRIC]' in l and 'drop=' in l and 'N/A' not in l]
+        drop_lines = [l for l in lines if '[METRIC]' in l and 'drop=' in l and 'drop=N/A' not in l]
         if drop_lines:
             drop_values = []
             for line in drop_lines:
@@ -1354,7 +1354,7 @@ def analyze_logs():
             if len(drop_values) >= 2:
                 deltas = [b - a for a, b in zip(drop_values, drop_values[1:])]
                 bad_intervals = sum(1 for d in deltas if d > 24)
-                if bad_intervals > len(deltas) * 0.1 and bad_intervals > 5:
+                if bad_intervals > len(deltas) * 0.1 and bad_intervals > 3:
                     issues.append({
                         'type': 'encoding',
                         'severity': 'high',
@@ -1398,6 +1398,25 @@ def analyze_logs():
                 'hint': 'Power dipped at some point. Monitor pwr= metric, check PoE/power supply under load'
             })
 
+        # Additional undervoltage detection by core voltage (vcgencmd sometimes misses it)
+        volt_lines = [l for l in lines if '[METRIC]' in l and 'volt=' in l]
+        if volt_lines:
+            volt_values = []
+            for line in volt_lines:
+                match = re.search(r'volt=([0-9.]+)V', line)
+                if match:
+                    try:
+                        volt_values.append(float(match.group(1)))
+                    except ValueError:
+                        pass
+            if volt_values and min(volt_values) < 0.87:
+                issues.append({
+                    'type': 'power',
+                    'severity': 'high',
+                    'message': f'Core voltage dropped to {min(volt_values):.4f}V — undervoltage causing CPU throttling',
+                    'hint': 'Replace power supply / shorten PoE cable / check for loose connections. Pi 4 needs stable 5V 3A'
+                })
+
         # CPU temperature (throttling)
         temp_lines = [l for l in lines if '[METRIC]' in l and 'temp=' in l and 'N/A' not in l]
         if temp_lines:
@@ -1409,13 +1428,22 @@ def analyze_logs():
                         temp_values.append(float(match.group(1)))
                     except ValueError:
                         pass
-            if temp_values and max(temp_values) > 75:
-                issues.append({
-                    'type': 'cpu',
-                    'severity': 'high',
-                    'message': f'CPU temperature peaked at {max(temp_values):.1f}°C — possible thermal throttling',
-                    'hint': 'Improve cooling, reduce enclosure temperature, or lower encoding load'
-                })
+            if temp_values:
+                max_temp = max(temp_values)
+                if max_temp > 75:
+                    issues.append({
+                        'type': 'cpu',
+                        'severity': 'high',
+                        'message': f'CPU temperature peaked at {max_temp:.1f}°C — possible thermal throttling',
+                        'hint': 'Improve cooling, reduce enclosure temperature, or lower encoding load'
+                    })
+                elif max_temp > 70:
+                    issues.append({
+                        'type': 'cpu',
+                        'severity': 'medium',
+                        'message': f'CPU temperature {max_temp:.1f}°C — approaching thermal throttle threshold (80°C)',
+                        'hint': 'Check cooling fan, heatsink, enclosure ventilation'
+                    })
 
         # Low memory
         mem_lines = [l for l in lines if '[METRIC]' in l and 'mem=' in l and 'N/A' not in l]
