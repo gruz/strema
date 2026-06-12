@@ -31,7 +31,7 @@ def get_version():
             return VERSION_FILE.read_text().strip()
     except:
         pass
-    return "unknown"
+    return "невідомо"
 
 
 def is_config_ready(config):
@@ -156,7 +156,7 @@ def save_config(config_data):
     try:
         with open(CONFIG_FILE, 'w') as f:
             f.writelines(new_lines)
-        return True, "Configuration saved successfully"
+        return True, "Конфігурацію успішно збережено"
     except Exception as e:
         return False, str(e)
 
@@ -197,7 +197,7 @@ def installer_save():
         overlay_text = (data.get('OVERLAY_TEXT') or '')
 
         if not rtmp_url:
-            return jsonify({'success': False, 'error': 'RTMP URL is required'}), 400
+            return jsonify({'success': False, 'error': 'RTMP URL є обов\'язковим'}), 400
 
         success, message = save_config({
             'RTMP_URL': rtmp_url,
@@ -277,9 +277,9 @@ def start_service():
             # Start auto-restart timer if enabled
             if config.get('AUTO_RESTART_ENABLED', 'false') == 'true':
                 os.system('sudo systemctl start forpost-stream-autorestart.timer')
-            return jsonify({'success': True, 'message': 'Stream started successfully'})
+            return jsonify({'success': True, 'message': 'Стрім успішно запущено'})
         else:
-            return jsonify({'success': False, 'error': 'Failed to start stream'}), 500
+            return jsonify({'success': False, 'error': 'Не вдалося запустити стрім'}), 500
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -293,9 +293,9 @@ def stop_service():
         # Stop UDP proxy as well
         os.system('sudo systemctl stop forpost-udp-proxy 2>/dev/null')
         if result == 0:
-            return jsonify({'success': True, 'message': 'Stream stopped successfully'})
+            return jsonify({'success': True, 'message': 'Стрім успішно зупинено'})
         else:
-            return jsonify({'success': False, 'error': 'Failed to stop stream'}), 500
+            return jsonify({'success': False, 'error': 'Не вдалося зупинити стрім'}), 500
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -313,9 +313,9 @@ def restart_service():
         
         result = os.system('sudo systemctl restart forpost-stream')
         if result == 0:
-            return jsonify({'success': True, 'message': 'Stream restarted successfully'})
+            return jsonify({'success': True, 'message': 'Стрім успішно перезапущено'})
         else:
-            return jsonify({'success': False, 'error': 'Failed to restart stream'}), 500
+            return jsonify({'success': False, 'error': 'Не вдалося перезапустити стрім'}), 500
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -630,7 +630,7 @@ def get_backup_content(backup_num):
     """API endpoint to get backup content."""
     try:
         if backup_num < 1 or backup_num > 3:
-            return jsonify({'error': 'Invalid backup number'}), 400
+            return jsonify({'error': 'Некоректний номер резервної копії'}), 400
         
         backup_file = CONFIG_FILE.with_suffix(f'.conf.backup.{backup_num}')
         
@@ -658,7 +658,7 @@ def restore_from_backup(backup_num):
     """API endpoint to restore configuration from backup."""
     try:
         if backup_num < 1 or backup_num > 3:
-            return jsonify({'success': False, 'error': 'Invalid backup number'}), 400
+            return jsonify({'success': False, 'error': 'Некоректний номер резервної копії'}), 400
         
         backup_file = CONFIG_FILE.with_suffix(f'.conf.backup.{backup_num}')
         
@@ -1206,7 +1206,7 @@ def analyze_logs():
     try:
         log_path = LOGS_DIR / 'debug.log'
         if not log_path.exists():
-            return jsonify({'issues': [], 'recommendation': 'Debug log not found. Enable DEBUG_MODE first.'})
+            return jsonify({'issues': [], 'recommendation': 'Debug-лог не знайдено. Спочатку увімкніть DEBUG_MODE.'})
 
         # Parse optional hours filter
         hours = request.args.get('hours', '0')
@@ -1272,8 +1272,8 @@ def analyze_logs():
                     issues.append({
                         'type': 'cpu',
                         'severity': 'high',
-                        'message': f'ffmpeg CPU > 250% (of 400% on 4 cores) in {saturated}/{len(cpu_values)} samples — encoder near saturation',
-                        'hint': 'Reduce VIDEO_BITRATE, VIDEO_FPS, or disable overlays'
+                        'message': f'CPU ffmpeg > 250% (з 400% на 4 ядрах) у {saturated}/{len(cpu_values)} вимірах — кодувальник на межі насичення',
+                        'hint': 'Зменшіть VIDEO_BITRATE, VIDEO_FPS або вимкніть оверлеї'
                     })
 
         # Local link check (ping to default gateway)
@@ -1282,8 +1282,8 @@ def analyze_logs():
             issues.append({
                 'type': 'network',
                 'severity': 'high',
-                'message': f'{len(timeouts)} gateway ping timeouts — local link unstable (PoE cable / router)',
-                'hint': 'Check PoE cable and local network equipment'
+                'message': f'{len(timeouts)} таймаутів пінгу до шлюзу — локальне з\'єднання нестабільне (PoE-кабель / роутер)',
+                'hint': 'Перевірте PoE-кабель та локальне мережеве обладнання'
             })
 
         # Gateway ping packet loss (partial loss within burst)
@@ -1298,8 +1298,8 @@ def analyze_logs():
                 issues.append({
                     'type': 'network',
                     'severity': 'medium',
-                    'message': f'Partial packet loss to gateway in {loss_events} samples — local link jitter',
-                    'hint': 'Check PoE cable quality and length, possible electrical interference'
+                    'message': f'Часткова втрата пакетів до шлюзу у {loss_events} вимірах — джиттер локального з\'єднання',
+                    'hint': 'Перевірте якість та довжину PoE-кабелю, можливі електромагнітні перешкоди'
                 })
 
         # TCP RTT to RTMP server (real connection latency, works even if ICMP is blocked)
@@ -1319,8 +1319,8 @@ def analyze_logs():
                     issues.append({
                         'type': 'network',
                         'severity': 'medium',
-                        'message': f'High TCP RTT (>500ms) to RTMP server in {high_rtt}/{len(rtt_values)} samples',
-                        'hint': 'Slow uplink (Starlink congestion?). Stream latency will be high'
+                        'message': f'Високий TCP RTT (>500 мс) до RTMP-сервера у {high_rtt}/{len(rtt_values)} вимірах',
+                        'hint': 'Повільний uplink (перевантаження Starlink?). Затримка стріму буде високою'
                     })
 
         # Packet loss: retrans is a cumulative counter (resets per connection) — sum growth
@@ -1336,8 +1336,8 @@ def analyze_logs():
                 issues.append({
                     'type': 'network',
                     'severity': 'medium',
-                    'message': f'{retrans_total} TCP retransmits over the monitored period — packet loss on uplink',
-                    'hint': 'Network congestion or Starlink handoff'
+                    'message': f'{retrans_total} TCP-ретрансмісій за період моніторингу — втрата пакетів на uplink',
+                    'hint': 'Перевантаження мережі або хендовер Starlink'
                 })
 
         # Encoding speed (lag detection): count slow samples over whole period
@@ -1358,8 +1358,8 @@ def analyze_logs():
                     issues.append({
                         'type': 'encoding',
                         'severity': 'high',
-                        'message': f'Encoding speed < 0.95x in {slow}/{len(speed_values)} samples — cannot keep up with real-time',
-                        'hint': 'Lower VIDEO_BITRATE or VIDEO_FPS, disable overlays, or check CPU throttling (undervoltage/overheating)'
+                        'message': f'Швидкість кодування < 0.95x у {slow}/{len(speed_values)} вимірах — не встигає за реальним часом',
+                        'hint': 'Зменшіть VIDEO_BITRATE або VIDEO_FPS, вимкніть оверлеї або перевірте тротлінг CPU (недостатнє живлення/перегрів)'
                     })
 
         # Dropped frames
@@ -1381,8 +1381,8 @@ def analyze_logs():
                     issues.append({
                         'type': 'encoding',
                         'severity': 'high',
-                        'message': f'High frame drop rate (>3/s) in {bad_intervals}/{len(deltas)} intervals — encoder cannot keep up',
-                        'hint': 'CPU overload. Lower bitrate/FPS or disable overlays. Note: ~1 drop/s is normal fps conversion (25->24)'
+                        'message': f'Високий рівень відкидання кадрів (>3/с) у {bad_intervals}/{len(deltas)} інтервалах — кодувальник не справляється',
+                        'hint': 'Перевантаження CPU. Зменшіть бітрейт/FPS або вимкніть оверлеї. Примітка: ~1 drop/с — нормальна конверсія fps (25->24)'
                     })
 
         # USB disconnects (peripherals resetting — power or cable issues)
@@ -1399,8 +1399,8 @@ def analyze_logs():
                 issues.append({
                     'type': 'power',
                     'severity': 'high',
-                    'message': f'{new_disconnects} USB disconnect(s) during monitoring — peripherals (VRX/capture/RP2040) are resetting',
-                    'hint': 'Likely power supply issue or loose USB cable. Check dmesg to identify which device resets'
+                    'message': f'{new_disconnects} USB-дисконект(и) під час моніторингу — периферія (VRX/capture/RP2040) перезавантажується',
+                    'hint': 'Ймовірно проблема з живленням або ослаблений USB-кабель. Перевірте dmesg, щоб визначити, який пристрій перезавантажується'
                 })
 
         # Power: undervoltage detection (Raspberry Pi)
@@ -1410,15 +1410,15 @@ def analyze_logs():
             issues.append({
                 'type': 'power',
                 'severity': 'high',
-                'message': f'Undervoltage detected in {len(undervolt_now)} samples — power supply insufficient',
-                'hint': 'Check PoE cable length/quality and power supply. Voltage drops cause CPU throttling and stream lag'
+                'message': f'Виявлено недостатнє живлення у {len(undervolt_now)} вимірах — блок живлення недостатній',
+                'hint': 'Перевірте довжину/якість PoE-кабелю та блок живлення. Просадка напруги призводить до тротлінгу CPU та лагів стріму'
             })
         elif undervolt_past:
             issues.append({
                 'type': 'power',
                 'severity': 'medium',
-                'message': 'Undervoltage occurred since boot (not currently active)',
-                'hint': 'Power dipped at some point. Monitor pwr= metric, check PoE/power supply under load'
+                'message': 'Недостатнє живлення траплялося з моменту завантаження (зараз не активно)',
+                'hint': 'Живлення просідало в якийсь момент. Моніторте метрику pwr=, перевірте PoE/живлення під навантаженням'
             })
 
         # Additional undervoltage detection by core voltage (vcgencmd sometimes misses it)
@@ -1436,8 +1436,8 @@ def analyze_logs():
                 issues.append({
                     'type': 'power',
                     'severity': 'high',
-                    'message': f'Core voltage dropped to {min(volt_values):.4f}V — undervoltage causing CPU throttling',
-                    'hint': 'Replace power supply / shorten PoE cable / check for loose connections. Pi 4 needs stable 5V 3A'
+                    'message': f'Напруга ядра просіла до {min(volt_values):.4f}В — недостатнє живлення спричиняє тротлінг CPU',
+                    'hint': 'Замініть блок живлення / скоротіть PoE-кабель / перевірте з\'єднання. Pi 4 потребує стабільних 5В 3А'
                 })
 
         # CPU temperature (throttling)
@@ -1457,15 +1457,15 @@ def analyze_logs():
                     issues.append({
                         'type': 'cpu',
                         'severity': 'high',
-                        'message': f'CPU temperature peaked at {max_temp:.1f}°C — possible thermal throttling',
-                        'hint': 'Improve cooling, reduce enclosure temperature, or lower encoding load'
+                        'message': f'Температура CPU сягала {max_temp:.1f}°C — можливий термальний тротлінг',
+                        'hint': 'Покращіть охолодження, зменшіть температуру корпусу або знизьте навантаження на кодування'
                     })
                 elif max_temp > 70:
                     issues.append({
                         'type': 'cpu',
                         'severity': 'medium',
-                        'message': f'CPU temperature {max_temp:.1f}°C — approaching thermal throttle threshold (80°C)',
-                        'hint': 'Check cooling fan, heatsink, enclosure ventilation'
+                        'message': f'Температура CPU {max_temp:.1f}°C — наближається до порога термального тротлінгу (80°C)',
+                        'hint': 'Перевірте вентилятор охолодження, радіатор, вентиляцію корпусу'
                     })
 
         # Low memory
@@ -1480,8 +1480,8 @@ def analyze_logs():
                 issues.append({
                     'type': 'memory',
                     'severity': 'medium',
-                    'message': f'Memory critically low ({min(mem_values)}MB free) — risk of OOM',
-                    'hint': 'Check for memory leaks. Restarting services may help temporarily'
+                    'message': f'Пам\'ять критично мала ({min(mem_values)}МБ вільно) — ризик OOM',
+                    'hint': 'Перевірте на витоки пам\'яті. Перезапуск сервісів може тимчасово допомогти'
                 })
 
         # Disconnections (any disconnect is noteworthy)
@@ -1490,8 +1490,8 @@ def analyze_logs():
             issues.append({
                 'type': 'stream',
                 'severity': 'medium',
-                'message': f'{len(disconnects)} stream disconnection(s)',
-                'hint': 'Check network stability, RTMP server health, or ffmpeg crash (see [FFMPEG] lines before disconnect)'
+                'message': f'{len(disconnects)} розрив(и) стріму',
+                'hint': 'Перевірте стабільність мережі, стан RTMP-сервера або падіння ffmpeg (див. рядки [FFMPEG] перед розривом)'
             })
 
         # FFMPEG timestamp drift warnings (accumulated frame dropping causes playback issues)
@@ -1500,8 +1500,8 @@ def analyze_logs():
             issues.append({
                 'type': 'encoding',
                 'severity': 'medium',
-                'message': f'{len(past_duration)} "Past duration too large" warnings from ffmpeg',
-                'hint': 'Timestamp drift from frame dropping. Set VIDEO_FPS=25 to match VRX output, or check CPU load causing lag'
+                'message': f'{len(past_duration)} попереджень "Past duration too large" від ffmpeg',
+                'hint': 'Дрейф таймстемпів через відкидання кадрів. Встановіть VIDEO_FPS=25 для відповідності виходу VRX або перевірте навантаження CPU, що спричиняє лаги'
             })
 
         # Determine analyzed period from first/last timestamps
@@ -1510,27 +1510,27 @@ def analyze_logs():
         first_ts = next((m.group(1) for l in lines if (m := ts_re.match(l))), None)
         last_ts = next((m.group(1) for l in reversed(lines) if (m := ts_re.match(l))), None)
         if first_ts and last_ts:
-            period = f' (analyzed period: {first_ts} — {last_ts})'
+            period = f' (період аналізу: {first_ts} — {last_ts})'
 
         if not issues:
             return jsonify({
                 'issues': [],
-                'recommendation': f'No issues detected. Stream appears healthy.{period}'
+                'recommendation': f'Проблем не виявлено. Стрім виглядає стабільним.{period}'
             })
 
         recommendations = []
         if any(i['type'] == 'power' for i in issues):
-            recommendations.append('Fix power supply first — undervoltage causes throttling and instability')
+            recommendations.append('Спочатку виправте живлення — недостатнє живлення спричиняє тротлінг та нестабільність')
         if any(i['type'] == 'cpu' for i in issues):
-            recommendations.append('Reduce encoding load and improve cooling')
+            recommendations.append('Зменшіть навантаження на кодування та покращіть охолодження')
         if any(i['type'] == 'encoding' for i in issues):
-            recommendations.append('Lower bitrate/FPS or disable overlays to reduce encoding load')
+            recommendations.append('Зменшіть бітрейт/FPS або вимкніть оверлеї, щоб зменшити навантаження на кодування')
         if any(i['type'] == 'memory' for i in issues):
-            recommendations.append('Check for memory leaks and restart services if needed')
+            recommendations.append('Перевірте на витоки пам\'яті та перезапустіть сервіси за потреби')
         if any(i['type'] == 'network' for i in issues):
-            recommendations.append('Check network stability (Starlink handoffs may cause temporary issues)')
+            recommendations.append('Перевірте стабільність мережі (хендовери Starlink можуть спричиняти тимчасові проблеми)')
         if any(i['type'] == 'stream' for i in issues):
-            recommendations.append('Monitor RTMP server availability')
+            recommendations.append('Моніторте доступність RTMP-сервера')
 
         return jsonify({
             'issues': issues,

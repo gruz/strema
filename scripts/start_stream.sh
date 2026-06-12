@@ -34,7 +34,7 @@ debug_log() {
 
 # Check for configuration file
 if [ ! -f "$CONFIG_FILE" ]; then
-    log "ERROR: Configuration file not found: $CONFIG_FILE"
+    log "ПОМИЛКА: Файл конфігурації не знайдено: $CONFIG_FILE"
     exit 1
 fi
 
@@ -61,9 +61,9 @@ if [ -z "$FORPOST_IP" ] || [ "$FORPOST_IP" = "auto" ]; then
     if [ -z "$FORPOST_IP" ]; then
         # RTSP server runs locally, loopback works as fallback
         FORPOST_IP="127.0.0.1"
-        log "WARNING: IP detection failed, falling back to $FORPOST_IP"
+        log "ПОПЕРЕДЖЕННЯ: Не вдалося визначити IP, використовуємо резервний $FORPOST_IP"
     else
-        log "Auto-detected IP: $FORPOST_IP"
+        log "Автоматично визначено IP: $FORPOST_IP"
     fi
 fi
 
@@ -71,14 +71,14 @@ fi
 source "$SCRIPT_DIR/detect_rtsp_transport.sh"
 RTSP_TRANSPORT=$(detect_rtsp_transport)
 if [ "$RTSP_TRANSPORT" = "udp" ]; then
-    log "Detected VLC RTSP server - using UDP transport"
+    log "Виявлено VLC RTSP сервер — використовуємо UDP транспорт"
 else
-    log "Detected custom RTSP server - using TCP transport"
+    log "Виявлено кастомний RTSP сервер — використовуємо TCP транспорт"
 fi
 
 # Check for ffmpeg
 if ! command -v ffmpeg &> /dev/null; then
-    log "ERROR: ffmpeg is not installed"
+    log "ПОМИЛКА: ffmpeg не встановлено"
     exit 1
 fi
 
@@ -89,23 +89,23 @@ RTSP_URL="rtsp://${FORPOST_IP}:${RTSP_PORT}/${VIDEO_DEVICE}"
 if [ "$USE_UDP_PROXY" = "true" ]; then
     # Small buffer to prevent lag accumulation - old packets are dropped
     INPUT_URL="udp://127.0.0.1:${UDP_PROXY_PORT}?overrun_nonfatal=1&fifo_size=65536&buffer_size=131072&listen=0"
-    log "UDP Proxy mode enabled - reading from UDP port ${UDP_PROXY_PORT}"
+    log "Режим UDP Proxy увімкнено — читаємо з UDP порту ${UDP_PROXY_PORT}"
 else
     INPUT_URL="$RTSP_URL"
 fi
 
 # Validate required settings
 if [ -z "${RTMP_URL}" ]; then
-    log "ERROR: RTMP_URL is not configured. Open the web interface and set RTMP URL, then restart the service."
+    log "ПОМИЛКА: RTMP_URL не налаштовано. Відкрийте веб-інтерфейс і встановіть RTMP URL, потім перезапустіть сервіс."
     exit 1
 fi
 
 log "=========================================="
-log "Starting video stream"
+log "Запуск відеопотоку"
 log "=========================================="
-log "RTSP source: $RTSP_URL"
+log "Джерело RTSP: $RTSP_URL"
 log "RTMP: ${RTMP_URL%/*}/***"
-log "Stream mode: $STREAM_MODE"
+log "Режим стріму: $STREAM_MODE"
 log "=========================================="
 
 # File for dynamic frequency
@@ -130,7 +130,7 @@ should_stream() {
     fi
     
     if [ ! -x "$SCAN_DETECTOR" ]; then
-        log "WARNING: Scan detector not found, streaming anyway"
+        log "ПОПЕРЕДЖЕННЯ: Детектор сканування не знайдено, стрім запущено попри це"
         return 0
     fi
     
@@ -263,13 +263,13 @@ if [ "$OVERLAY_ENABLED" = "true" ]; then
     
     # Static overlay text
     if [ -n "$OVERLAY_TEXT" ]; then
-        log "Overlay text: $OVERLAY_TEXT (position: $OVERLAY_POSITION)"
+        log "Текст оверлею: $OVERLAY_TEXT (позиція: $OVERLAY_POSITION)"
         VF_FILTER=$(create_drawtext_filter "$OVERLAY_TEXT" "$OVERLAY_POSITION" "$OVERLAY_FONTSIZE_CUSTOM" "$OVERLAY_TEXT_COLOR" "$OVERLAY_TEXT_OPACITY_CUSTOM" "$OVERLAY_BORDER_WIDTH" "$OVERLAY_BORDER_COLOR" "$OVERLAY_BG_COLOR" "$OVERLAY_BG_OPACITY_CUSTOM" false)
     fi
     
     # Dynamic frequency
     if [ "$SHOW_FREQUENCY" = "true" ]; then
-        log "Frequency: enabled (updates every 2 sec, position: $FREQUENCY_POSITION)"
+        log "Частота: увімкнено (оновлення кожні 2 с, позиція: $FREQUENCY_POSITION)"
         
         # Start frequency updater in background
         if [ -x "$FREQ_UPDATER" ]; then
@@ -281,9 +281,9 @@ if [ "$OVERLAY_ENABLED" = "true" ]; then
             "$FREQ_UPDATER" &
             FREQ_PID=$!
             trap "kill $FREQ_PID 2>/dev/null" EXIT
-            log "Started frequency updater (PID: $FREQ_PID)"
+            log "Запущено оновлювач частоти (PID: $FREQ_PID)"
         else
-            log "WARNING: Frequency update script not found: $FREQ_UPDATER"
+            log "ПОПЕРЕДЖЕННЯ: Скрипт оновлення частоти не знайдено: $FREQ_UPDATER"
         fi
         
         # Add frequency filter with configurable display parameters
@@ -297,7 +297,7 @@ if [ "$OVERLAY_ENABLED" = "true" ]; then
     fi
     
     # Dynamic overlay (always available when overlay enabled)
-    log "Dynamic overlay: available (position: $DYNAMIC_OVERLAY_POSITION)"
+    log "Динамічний оверлей: доступний (позиція: $DYNAMIC_OVERLAY_POSITION)"
     
     # Initialize dynamic overlay file
     rm -f "$DYNAMIC_OVERLAY_FILE"
@@ -309,9 +309,9 @@ if [ "$OVERLAY_ENABLED" = "true" ]; then
         "$DYNAMIC_OVERLAY_UPDATER" &
         DYNAMIC_OVERLAY_PID=$!
         trap "kill $DYNAMIC_OVERLAY_PID 2>/dev/null; kill $FREQ_PID 2>/dev/null" EXIT
-        log "Started dynamic overlay updater (PID: $DYNAMIC_OVERLAY_PID)"
+        log "Запущено оновлювач динамічного оверлею (PID: $DYNAMIC_OVERLAY_PID)"
     else
-        log "WARNING: Dynamic overlay update script not found: $DYNAMIC_OVERLAY_UPDATER"
+        log "ПОПЕРЕДЖЕННЯ: Скрипт оновлення динамічного оверлею не знайдено: $DYNAMIC_OVERLAY_UPDATER"
     fi
     
     # Build dynamic overlay filter
@@ -323,14 +323,14 @@ if [ "$OVERLAY_ENABLED" = "true" ]; then
         VF_FILTER="$DYNAMIC_FILTER"
     fi
     
-    log "Using optimized software encoding (libx264, baseline profile)"
-    log "Parameters: BITRATE=${VIDEO_BITRATE}, FPS=${VIDEO_FPS}, GOP=${VIDEO_GOP}"
-    log "Static overlay: font size=${OVERLAY_FONTSIZE_CUSTOM}, color=${OVERLAY_TEXT_COLOR}"
-    log "Frequency: font size=${FREQUENCY_FONTSIZE}, color=${FREQUENCY_TEXT_COLOR}"
-    log "Dynamic overlay: font size=${DYNAMIC_OVERLAY_FONTSIZE}, color=${DYNAMIC_OVERLAY_TEXT_COLOR}"
+    log "Використовуємо оптимізоване програмне кодування (libx264, baseline profile)"
+    log "Параметри: BITRATE=${VIDEO_BITRATE}, FPS=${VIDEO_FPS}, GOP=${VIDEO_GOP}"
+    log "Статичний оверлей: розмір шрифту=${OVERLAY_FONTSIZE_CUSTOM}, колір=${OVERLAY_TEXT_COLOR}"
+    log "Частота: розмір шрифту=${FREQUENCY_FONTSIZE}, колір=${FREQUENCY_TEXT_COLOR}"
+    log "Динамічний оверлей: розмір шрифту=${DYNAMIC_OVERLAY_FONTSIZE}, колір=${DYNAMIC_OVERLAY_TEXT_COLOR}"
 else
-    log "Overlay disabled - using stream copy (no re-encoding)"
-    log "WARNING: Camera stream parameters (bitrate/profile/FPS) may not match RTMP server requirements"
+    log "Оверлей вимкнено — використовуємо копіювання потоку (без перекодування)"
+    log "ПОПЕРЕДЖЕННЯ: Параметри потоку камери (бітрейт/профіль/FPS) можуть не відповідати вимогам RTMP-сервера"
 fi
 
 # Auto-reconnect loop (watchdog service handles service restarts)
@@ -340,7 +340,7 @@ CHECK_INTERVAL=5
 while true; do
     # Initial check: fast detection (threshold=1) - any 1+ change = scanning
     if should_stream 1; then
-        log "Connecting to stream..."
+        log "Підключення до потоку..."
         
         # Build ffmpeg command based on source type
         if [ "$USE_UDP_PROXY" = "true" ]; then
@@ -503,7 +503,7 @@ while true; do
             
             if [ "$STREAM_MODE" = "on-lock" ]; then
                 if ! should_stream 2; then
-                    log "Scanner started scanning, stopping stream..."
+                    log "Сканер почав сканування, зупиняємо стрім..."
                     kill $FFMPEG_PID 2>/dev/null
                     wait $FFMPEG_PID 2>/dev/null
                     break
@@ -521,16 +521,16 @@ while true; do
         
         # Log last ffmpeg stderr on disconnect
         if [ "$DEBUG_MODE" = "true" ] && [ -f "$DEBUG_RAW_FILE" ]; then
-            debug_log "[EVENT] ffmpeg disconnected, last stderr lines:"
+            debug_log "[EVENT] ffmpeg відключено, останні рядки stderr:"
             tail -c 4096 "$DEBUG_RAW_FILE" | tr '\r' '\n' | tail -n 10 | while read line; do
                 debug_log "[FFMPEG] $line"
             done
             > "$DEBUG_RAW_FILE"
         fi
         
-        log "Stream disconnected. Reconnecting in ${RECONNECT_DELAY}s..."
+        log "Стрім відключено. Перепідключення через ${RECONNECT_DELAY}с..."
     else
-        log "Scanner is scanning, waiting for lock... (checking again in ${RECONNECT_DELAY}s)"
+        log "Сканер сканує, очікуємо захват... (перевірка знову через ${RECONNECT_DELAY}с)"
     fi
     
     sleep $RECONNECT_DELAY
