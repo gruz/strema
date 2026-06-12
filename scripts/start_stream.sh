@@ -342,6 +342,7 @@ RECONNECT_DELAY=2
 CHECK_INTERVAL=5
 
 while true; do
+    LAST_FFMPEG_EXIT=""
     # Initial check: fast detection (threshold=1) - any 1+ change = scanning
     if should_stream 1; then
         log "Підключення до потоку..."
@@ -510,12 +511,28 @@ while true; do
                     log "Сканер почав сканування, зупиняємо стрім..."
                     kill $FFMPEG_PID 2>/dev/null
                     wait $FFMPEG_PID 2>/dev/null
+                    LAST_FFMPEG_EXIT=$?
                     break
                 fi
             fi
         done
         
-        wait $FFMPEG_PID 2>/dev/null
+        if [ -n "$LAST_FFMPEG_EXIT" ]; then
+            FFMPEG_EXIT=$LAST_FFMPEG_EXIT
+            LAST_FFMPEG_EXIT=""
+        else
+            wait $FFMPEG_PID 2>/dev/null
+            FFMPEG_EXIT=$?
+        fi
+        
+        # Log disconnect reason for the analyzer
+        if [ "$DEBUG_MODE" = "true" ]; then
+            if [ "$FFMPEG_EXIT" -eq 143 ] || [ "$FFMPEG_EXIT" -eq 0 ]; then
+                debug_log "[EVENT] disconnected (graceful — scanning stopped)"
+            elif [ "$FFMPEG_EXIT" -ne 0 ]; then
+                debug_log "[EVENT] disconnected (ffmpeg exited with code $FFMPEG_EXIT)"
+            fi
+        fi
         
         # Stop debug monitor
         if [ "$DEBUG_MODE" = "true" ] && [ -n "$DEBUG_MON_PID" ]; then

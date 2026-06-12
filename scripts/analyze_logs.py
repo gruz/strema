@@ -283,13 +283,15 @@ def analyze_logs(log_dir, hours=0):
                 'hint': 'Перевірте на витоки пам\'яті. Перезапуск сервісів може тимчасово допомогти'
             })
 
-    # Disconnections (any disconnect is noteworthy)
-    disconnects = [l for l in lines if '[EVENT]' in l and 'disconnected' in l]
-    if len(disconnects) > 0:
+    # Disconnections: distinguish intentional stops from unexpected ones
+    disconnect_lines = [l for l in lines if '[EVENT]' in l and 'disconnected' in l]
+    graceful = [l for l in disconnect_lines if 'graceful' in l.lower() or 'сканування' in l.lower()]
+    unexpected = [l for l in disconnect_lines if l not in graceful]
+    if len(unexpected) > 0:
         issues.append({
             'type': 'stream',
             'severity': 'medium',
-            'message': f'{len(disconnects)} розрив(и) стріму',
+            'message': f'{len(unexpected)} розрив(и) стріму',
             'hint': 'Перевірте стабільність мережі, стан RTMP-сервера або падіння ffmpeg (див. рядки [FFMPEG] перед розривом)'
         })
 
