@@ -323,6 +323,10 @@ if [ "$OVERLAY_ENABLED" = "true" ]; then
         VF_FILTER="$DYNAMIC_FILTER"
     fi
     
+    # Pre-filter: reduce input framerate before overlay to save CPU
+    if [ -n "$VF_FILTER" ]; then
+        VF_FILTER="fps=fps=${VIDEO_FPS}:round=near,${VF_FILTER}"
+    fi
     log "Використовуємо оптимізоване програмне кодування (libx264, baseline profile)"
     log "Параметри: BITRATE=${VIDEO_BITRATE}, FPS=${VIDEO_FPS}, GOP=${VIDEO_GOP}"
     log "Статичний оверлей: розмір шрифту=${OVERLAY_FONTSIZE_CUSTOM}, колір=${OVERLAY_TEXT_COLOR}"
