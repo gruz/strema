@@ -300,11 +300,21 @@ def analyze_logs(log_dir, hours=0):
                 except ValueError:
                     pass
         if volt_values and min(volt_values) < 0.87:
+            min_volt = min(volt_values)
+            if min_volt < 0.85:
+                severity = 'high'
+                message = f'Напруга ядра критично просіла до {min_volt:.4f}В — ризик нестабільності та тротлінгу'
+            elif undervolt_now or undervolt_past:
+                severity = 'high'
+                message = f'Напруга ядра просіла до {min_volt:.4f}В і зафіксовано тротлінг/undervoltage — живлення недостатнє'
+            else:
+                severity = 'medium'
+                message = f'Напруга ядра просіла до {min_volt:.4f}В (разове просідання, наслідків не виявлено)'
             issues.append({
                 'type': 'power',
-                'severity': 'high',
-                'message': f'Напруга ядра просіла до {min(volt_values):.4f}В — недостатнє живлення спричиняє тротлінг CPU',
-                'hint': 'Замініть блок живлення / скоротіть PoE-кабель / перевірте з\'єднання. Pi 4 потребує стабільних 5В 3А'
+                'severity': severity,
+                'message': message,
+                'hint': 'Якщо просідання часте або супроводжується лагами — перевірте блок живлення / PoE-кабель / з\'єднання. Pi 4 потребує стабільних 5В 3А'
             })
 
     # CPU temperature (throttling)
@@ -429,7 +439,9 @@ def format_text(result):
             lines.append(f"   Підказка: {issue['hint']}")
             lines.append('')
         lines.append('Рекомендації:')
-        lines.append(result['recommendation'])
+        for rec in result['recommendation'].split(' • '):
+            if rec.strip():
+                lines.append(f"  • {rec.strip()}")
 
     return '\n'.join(lines)
 

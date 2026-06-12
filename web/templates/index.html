@@ -2894,9 +2894,14 @@ VIDEO_BITRATE=2000k"></textarea>
                             <div style="font-size: 12px; color: #808080; margin-top: 4px;">💡 ${escapeHtml(issue.hint)}</div>
                         </div>`;
                     });
+                    const recItems = data.recommendation.split(' • ').filter(r => r.trim());
                     html += `<div style="margin-top: 12px; padding: 8px; background: #1e3a1e; border-radius: 4px; color: #b5cea8;">
-                        <strong>Рекомендація:</strong> ${escapeHtml(data.recommendation)}
-                    </div>`;
+                        <strong>Рекомендації:</strong>
+                        <ul style="margin: 4px 0 0 18px; padding: 0;">`;
+                    recItems.forEach(r => {
+                        html += `<li>${escapeHtml(r.trim())}</li>`;
+                    });
+                    html += `</ul></div>`;
                 } else {
                     html += `<div style="color: #b5cea8; padding: 8px; background: #1e3a1e; border-radius: 4px;">
                         ✅ ${escapeHtml(data.recommendation)}
