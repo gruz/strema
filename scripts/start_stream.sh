@@ -327,7 +327,16 @@ if [ "$OVERLAY_ENABLED" = "true" ]; then
     if [ -n "$VF_FILTER" ]; then
         VF_FILTER="fps=fps=${VIDEO_FPS}:round=near,${VF_FILTER}"
     fi
-    log "Використовуємо оптимізоване програмне кодування (libx264, baseline profile)"
+    # Detect available encoder: prefer hardware, fallback to software
+    if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "h264_v4l2m2m"; then
+        ENCODER="h264_v4l2m2m"
+        ENCODER_OPTS=""
+        log "Використовуємо апаратне кодування (h264_v4l2m2m)"
+    else
+        ENCODER="libx264"
+        ENCODER_OPTS="-preset ultrafast -tune zerolatency -bf 0 -pix_fmt yuv420p -sc_threshold 0"
+        log "Використовуємо програмне кодування (libx264, fallback)"
+    fi
     log "Параметри: BITRATE=${VIDEO_BITRATE}, FPS=${VIDEO_FPS}, GOP=${VIDEO_GOP}"
     log "Статичний оверлей: розмір шрифту=${OVERLAY_FONTSIZE_CUSTOM}, колір=${OVERLAY_TEXT_COLOR}"
     log "Частота: розмір шрифту=${FREQUENCY_FONTSIZE}, колір=${FREQUENCY_TEXT_COLOR}"
@@ -376,8 +385,7 @@ while true; do
                     $INPUT_PARAMS \
                     -vf "$VF_FILTER" \
                     -r ${VIDEO_FPS} \
-                    -c:v libx264 -preset ultrafast -tune zerolatency \
-                    -bf 0 -pix_fmt yuv420p -sc_threshold 0 \
+                    -c:v ${ENCODER} $ENCODER_OPTS \
                     $VSYNC_OPTS \
                     -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
                     -g ${VIDEO_GOP} \
@@ -388,8 +396,7 @@ while true; do
                     $INPUT_PARAMS \
                     -vf "$VF_FILTER" \
                     -r ${VIDEO_FPS} \
-                    -c:v libx264 -preset ultrafast -tune zerolatency \
-                    -bf 0 -pix_fmt yuv420p -sc_threshold 0 \
+                    -c:v ${ENCODER} $ENCODER_OPTS \
                     $VSYNC_OPTS \
                     -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
                     -g ${VIDEO_GOP} \
