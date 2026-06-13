@@ -88,7 +88,7 @@ RTSP_URL="rtsp://${FORPOST_IP}:${RTSP_PORT}/${VIDEO_DEVICE}"
 # UDP Proxy settings (loaded from defaults.conf)
 if [ "$USE_UDP_PROXY" = "true" ]; then
     # Small buffer to prevent lag accumulation - old packets are dropped
-    INPUT_URL="udp://127.0.0.1:${UDP_PROXY_PORT}?overrun_nonfatal=1&fifo_size=65536&buffer_size=131072&listen=0"
+    INPUT_URL="udp://127.0.0.1:${UDP_PROXY_PORT}?overrun_nonfatal=1&fifo_size=500000&buffer_size=500000&listen=0"
     log "Режим UDP Proxy увімкнено — читаємо з UDP порту ${UDP_PROXY_PORT}"
 else
     INPUT_URL="$RTSP_URL"
@@ -359,14 +359,11 @@ while true; do
         
         # Build ffmpeg command based on source type
         if [ "$USE_UDP_PROXY" = "true" ]; then
-            # UDP input - low latency configuration
-            # -fflags nobuffer: disable input buffering
-            # -flags low_delay: minimize encoding delay
-            # -probesize: quick stream analysis
-            INPUT_PARAMS="-fflags nobuffer -flags low_delay -probesize 32768 -analyzeduration 0 -i $INPUT_URL"
+            # UDP input - larger probesize for Starlink jitter
+            INPUT_PARAMS="-fflags nobuffer -flags low_delay -probesize 500000 -analyzeduration 1000000 -thread_queue_size 512 -i $INPUT_URL"
         else
             # RTSP input
-            INPUT_PARAMS="-rtsp_transport $RTSP_TRANSPORT -i $RTSP_URL"
+            INPUT_PARAMS="-rtsp_transport $RTSP_TRANSPORT -fflags +genpts+igndts -probesize 500000 -analyzeduration 1000000 -thread_queue_size 512 -i $RTSP_URL"
         fi
         
         # Build video encoding parameters and run in background
