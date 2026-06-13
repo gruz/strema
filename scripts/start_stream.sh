@@ -377,41 +377,45 @@ while true; do
                 VSYNC_OPTS="-vsync drop -max_muxing_queue_size 1024"
             fi
 
+            # Build ffmpeg args as array (no duplication between log and exec)
             if [ "$DEBUG_MODE" = "true" ]; then
-                ffmpeg -hide_banner -loglevel verbose -stats_period 5 \
-                    $INPUT_PARAMS \
-                    -vf "$VF_FILTER" \
-                    -r ${VIDEO_FPS} \
-                    -c:v ${ENCODER} $ENCODER_OPTS \
-                    $VSYNC_OPTS \
-                    -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
-                    -g ${VIDEO_GOP} \
-                    -an -f flv "$RTMP_URL" \
-                    2>> "$DEBUG_RAW_FILE" &
+                FFMPEG_ARR=(ffmpeg -hide_banner -loglevel verbose -stats_period 5)
             else
-                ffmpeg -hide_banner \
-                    $INPUT_PARAMS \
-                    -vf "$VF_FILTER" \
-                    -r ${VIDEO_FPS} \
-                    -c:v ${ENCODER} $ENCODER_OPTS \
-                    $VSYNC_OPTS \
-                    -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
-                    -g ${VIDEO_GOP} \
-                    -an -f flv "$RTMP_URL" \
-                    2>/dev/null &
+                FFMPEG_ARR=(ffmpeg -hide_banner)
+            fi
+            read -ra INPUT_ARR <<< "$INPUT_PARAMS"
+            FFMPEG_ARR+=("${INPUT_ARR[@]}")
+            FFMPEG_ARR+=(-vf "$VF_FILTER" -r "${VIDEO_FPS}" -c:v "${ENCODER}")
+            if [ -n "$ENCODER_OPTS" ]; then
+                read -ra ENC_ARR <<< "$ENCODER_OPTS"
+                FFMPEG_ARR+=("${ENC_ARR[@]}")
+            fi
+            if [ -n "$VSYNC_OPTS" ]; then
+                read -ra VSYNC_ARR <<< "$VSYNC_OPTS"
+                FFMPEG_ARR+=("${VSYNC_ARR[@]}")
+            fi
+            FFMPEG_ARR+=(-b:v "${VIDEO_BITRATE}" -maxrate "${VIDEO_BITRATE}" -bufsize "${VIDEO_BUFSIZE}" -g "${VIDEO_GOP}" -an -f flv "${RTMP_URL}")
+            if [ "$DEBUG_MODE" = "true" ]; then
+                debug_log "ffmpeg command: ${FFMPEG_ARR[*]}"
+                "${FFMPEG_ARR[@]}" 2>> "$DEBUG_RAW_FILE" &
+            else
+                "${FFMPEG_ARR[@]}" 2>/dev/null &
             fi
         else
             # No overlay - just copy
             if [ "$DEBUG_MODE" = "true" ]; then
-                ffmpeg -hide_banner -loglevel verbose -stats_period 5 \
-                    $INPUT_PARAMS \
-                    -c:v copy -an -f flv "$RTMP_URL" \
-                    2>> "$DEBUG_RAW_FILE" &
+                FFMPEG_ARR=(ffmpeg -hide_banner -loglevel verbose -stats_period 5)
             else
-                ffmpeg -hide_banner \
-                    $INPUT_PARAMS \
-                    -c:v copy -an -f flv "$RTMP_URL" \
-                    2>/dev/null &
+                FFMPEG_ARR=(ffmpeg -hide_banner)
+            fi
+            read -ra INPUT_ARR <<< "$INPUT_PARAMS"
+            FFMPEG_ARR+=("${INPUT_ARR[@]}")
+            FFMPEG_ARR+=(-c:v copy -an -f flv "${RTMP_URL}")
+            if [ "$DEBUG_MODE" = "true" ]; then
+                debug_log "ffmpeg command: ${FFMPEG_ARR[*]}"
+                "${FFMPEG_ARR[@]}" 2>> "$DEBUG_RAW_FILE" &
+            else
+                "${FFMPEG_ARR[@]}" 2>/dev/null &
             fi
         fi
         
