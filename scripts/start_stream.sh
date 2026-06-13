@@ -359,11 +359,11 @@ while true; do
         
         # Build ffmpeg command based on source type
         if [ "$USE_UDP_PROXY" = "true" ]; then
-            # UDP input - larger probesize for Starlink jitter
-            INPUT_PARAMS="-fflags nobuffer -flags low_delay -probesize 500000 -analyzeduration 1000000 -thread_queue_size 512 -i $INPUT_URL"
+            # UDP input - small buffer to prevent lag accumulation
+            INPUT_PARAMS="-fflags nobuffer -flags low_delay -probesize 500000 -analyzeduration 1000000 -thread_queue_size 2048 -i $INPUT_URL"
         else
             # RTSP input
-            INPUT_PARAMS="-rtsp_transport $RTSP_TRANSPORT -fflags +genpts+igndts -probesize 500000 -analyzeduration 1000000 -thread_queue_size 512 -i $RTSP_URL"
+            INPUT_PARAMS="-rtsp_transport $RTSP_TRANSPORT -fflags +genpts+igndts -probesize 500000 -analyzeduration 1000000 -thread_queue_size 2048 -i $RTSP_URL"
         fi
         
         # Build video encoding parameters and run in background
@@ -371,10 +371,10 @@ while true; do
             # With overlay - re-encode with Delta-compatible settings:
             # libx264, constrained bitrate (maxrate capped), zerolatency, no B-frames, GOP = 2 * FPS.
             # Bufsize is 1.5x bitrate to improve motion quality without exceeding maxrate.
-            # Optional late-frame dropping (configured in advanced settings)
+            # Lag management: force constant frame rate, skip old frames on lag
             VSYNC_OPTS=""
             if [ "$FFMPEG_DROP_LATE_FRAMES" = "true" ]; then
-                VSYNC_OPTS="-vsync drop -max_muxing_queue_size 1024"
+                VSYNC_OPTS="-vsync cfr -max_muxing_queue_size 4096"
             fi
 
             # Build ffmpeg args as array (no duplication between log and exec)
