@@ -365,6 +365,12 @@ while true; do
             # With overlay - re-encode with Delta-compatible settings:
             # libx264, constrained bitrate (maxrate capped), zerolatency, no B-frames, GOP = 2 * FPS.
             # Bufsize is 1.5x bitrate to improve motion quality without exceeding maxrate.
+            # Optional late-frame dropping (configured in advanced settings)
+            VSYNC_OPTS=""
+            if [ "$FFMPEG_DROP_LATE_FRAMES" = "true" ]; then
+                VSYNC_OPTS="-vsync drop -max_muxing_queue_size 1024"
+            fi
+
             if [ "$DEBUG_MODE" = "true" ]; then
                 ffmpeg -hide_banner -loglevel verbose -stats_period 5 \
                     $INPUT_PARAMS \
@@ -372,6 +378,7 @@ while true; do
                     -r ${VIDEO_FPS} \
                     -c:v libx264 -preset ultrafast -tune zerolatency \
                     -bf 0 -pix_fmt yuv420p -sc_threshold 0 \
+                    $VSYNC_OPTS \
                     -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
                     -g ${VIDEO_GOP} \
                     -an -f flv "$RTMP_URL" \
@@ -383,6 +390,7 @@ while true; do
                     -r ${VIDEO_FPS} \
                     -c:v libx264 -preset ultrafast -tune zerolatency \
                     -bf 0 -pix_fmt yuv420p -sc_threshold 0 \
+                    $VSYNC_OPTS \
                     -b:v ${VIDEO_BITRATE} -maxrate ${VIDEO_BITRATE} -bufsize ${VIDEO_BUFSIZE} \
                     -g ${VIDEO_GOP} \
                     -an -f flv "$RTMP_URL" \
