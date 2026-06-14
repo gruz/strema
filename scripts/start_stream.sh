@@ -207,8 +207,8 @@ create_drawtext_filter() {
     fi
     
     if [ "$border_width" -gt 0 ]; then
-        # Use border for readability
-        echo "drawtext=${text_param}:fontsize=${fontsize}:fontcolor=${color}@${text_opacity}:borderw=${border_width}:bordercolor=${border_color}:x=${x_coord}:y=${y_coord}"
+        # Use border for readability with a bold font so the outline doesn't swallow thin glyphs
+        echo "drawtext=${text_param}:fontsize=${fontsize}:fontcolor=${color}@${text_opacity}:borderw=${border_width}:bordercolor=${border_color}:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:x=${x_coord}:y=${y_coord}"
     else
         # Use background box
         echo "drawtext=${text_param}:fontsize=${fontsize}:fontcolor=${color}@${text_opacity}:box=1:boxcolor=${bg_color}@${bg_opacity}:boxborderw=5:x=${x_coord}:y=${y_coord}"
