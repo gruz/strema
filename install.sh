@@ -9,7 +9,12 @@
 
 set -e
 
-GITHUB_REPO="gruz/strema-release"
+REPO_BASE="strema-release"
+GITHUB_REPO="gruz/$REPO_BASE"
+# Release archives (built by scripts/build_binaries.sh) extract to a folder
+# named "strema" regardless of the repo name. GitHub source archives instead
+# use the "<repo>-<branch>" naming convention.
+RELEASE_DIR_NAME="strema"
 
 # Helper to get the latest stable release tag from GitHub (no jq required)
 get_latest_release() {
@@ -34,7 +39,7 @@ download_strema() {
                 exit 1
             }
             tar -xzf strema.tar.gz
-            SOURCE_DIR="strema"
+            SOURCE_DIR="$RELEASE_DIR_NAME"
         else
             echo "⚠️  Could not determine latest release, falling back to master..."
             local ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/master.tar.gz"
@@ -44,7 +49,7 @@ download_strema() {
                 exit 1
             }
             tar -xzf strema.tar.gz
-            SOURCE_DIR="strema-master"
+            SOURCE_DIR="$REPO_BASE-master"
         fi
     elif [ "$VERSION" = "master" ]; then
         echo "Downloading latest master branch..."
@@ -55,7 +60,7 @@ download_strema() {
             exit 1
         }
         tar -xzf strema.tar.gz
-        SOURCE_DIR="strema-master"
+        SOURCE_DIR="$REPO_BASE-master"
     else
         echo "Downloading release $VERSION..."
         local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION.tar.gz"
@@ -65,7 +70,7 @@ download_strema() {
             exit 1
         }
         tar -xzf strema.tar.gz
-        SOURCE_DIR="strema"
+        SOURCE_DIR="$RELEASE_DIR_NAME"
     fi
 }
 
