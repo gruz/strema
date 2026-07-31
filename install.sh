@@ -110,8 +110,8 @@ echo ""
 echo "[1/5] Stopping and removing old services..."
 STREAM_WAS_ACTIVE=false
 UDP_PROXY_WAS_ACTIVE=false
-STREAM_STATE=$(sudo systemctl is-active forpost-stream 2>/dev/null)
-UDP_STATE=$(sudo systemctl is-active forpost-udp-proxy 2>/dev/null)
+STREAM_STATE=$(sudo systemctl is-active forpost-stream 2>/dev/null || true)
+UDP_STATE=$(sudo systemctl is-active forpost-udp-proxy 2>/dev/null || true)
 if [ "$STREAM_STATE" = "active" ] || [ "$STREAM_STATE" = "activating" ] || [ "$STREAM_STATE" = "reloading" ] || [ -f /tmp/.forpost_stream_was_active ]; then
     STREAM_WAS_ACTIVE=true
     echo "📝 Stream service is running - will restart after update"
