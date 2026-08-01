@@ -22,68 +22,116 @@ GITHUB_REPO="gruz/$REPO_BASE"
 # use the "<repo>-<branch>" naming convention.
 RELEASE_DIR_NAME="strema"
 
+# Check GitHub API rate limit and print a helpful message if exhausted.
+# GitHub unauthenticated API is limited to 60 requests/hour per IP. When the
+# limit is hit, the API returns HTTP 403 with X-RateLimit-Remaining: 0.
+# Sets RATE_LIMITED=1 if exhausted, otherwise leaves it unset.
+# Args: $1 = curl HTTP status code, $2 = response headers (for reset time).
+check_rate_limit() {
+    local status="$1"
+    local headers="$2"
+    RATE_LIMITED=""
+    if [ "$status" = "403" ]; then
+        local remaining
+        remaining=$(echo "$headers" | grep -i '^x-ratelimit-remaining:' | awk '{print $2}' | tr -d '\r')
+        if [ "$remaining" = "0" ]; then
+            local reset_ts reset_in
+            reset_ts=$(echo "$headers" | grep -i '^x-ratelimit-reset:' | awk '{print $2}' | tr -d '\r')
+            if [ -n "$reset_ts" ]; then
+                reset_in=$(( (reset_ts - $(date +%s)) / 60 ))
+                if [ "$reset_in" -lt 1 ]; then reset_in=1; fi
+                RATE_LIMIT_MSG="❌ GitHub API rate limit exhausted (60 requests/hour for unauthenticated requests).
+   Limit resets in ~${reset_in} minutes.
+   Options:
+     1. Wait and retry
+     2. Install a specific version (bypasses the API):
+        curl -fsSL https://raw.githubusercontent.com/gruz/strema-release/master/install.sh | bash -s v0.0.1-beta.05"
+            else
+                RATE_LIMIT_MSG="❌ GitHub API rate limit exhausted. Please wait and retry."
+            fi
+            RATE_LIMITED=1
+        fi
+    fi
+}
+
 # Helper to get the latest stable release tag from GitHub (no jq required).
 # If no stable release exists (only pre-releases/betas), falls back to the
-# most recent pre-release. Returns empty only if there are no releases at all.
+# most recent pre-release. Sets LATEST_TAG global (empty if no releases found
+# OR if rate-limited). Sets RATE_LIMITED=1 and RATE_LIMIT_MSG if rate-limited.
+# Must be called directly (NOT via $()), so that globals propagate.
 get_latest_release() {
+    local status headers body TAG
+    LATEST_TAG=""
+    RATE_LIMITED=""
+    RATE_LIMIT_MSG=""
+
     # Try stable "latest" release first (excludes pre-releases)
-    local TAG
-    TAG=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null \
-        | grep -o '"tag_name": "[^"]*"' \
-        | head -1 \
+    headers=$(curl -sSL -D - -o /tmp/strema_api_body \
+        "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null) || true
+    status=$(echo "$headers" | head -1 | awk '{print $2}')
+    check_rate_limit "$status" "$headers"
+    if [ -n "$RATE_LIMITED" ]; then
+        rm -f /tmp/strema_api_body
+        return
+    fi
+    body=$(cat /tmp/strema_api_body 2>/dev/null)
+    TAG=$(echo "$body" | grep -o '"tag_name": "[^"]*"' | head -1 \
         | sed 's/.*"tag_name": "//;s/"$//')
+    rm -f /tmp/strema_api_body
     if [ -n "$TAG" ]; then
-        echo "$TAG"
+        LATEST_TAG="$TAG"
         return
     fi
 
     # No stable release — fall back to the most recent pre-release.
     # The /releases endpoint lists all releases (including pre-releases),
     # most recent first.
-    TAG=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases?per_page=1" 2>/dev/null \
-        | grep -o '"tag_name": "[^"]*"' \
-        | head -1 \
+    headers=$(curl -sSL -D - -o /tmp/strema_api_body \
+        "https://api.github.com/repos/$GITHUB_REPO/releases?per_page=1" 2>/dev/null) || true
+    status=$(echo "$headers" | head -1 | awk '{print $2}')
+    check_rate_limit "$status" "$headers"
+    if [ -n "$RATE_LIMITED" ]; then
+        rm -f /tmp/strema_api_body
+        return
+    fi
+    body=$(cat /tmp/strema_api_body 2>/dev/null)
+    TAG=$(echo "$body" | grep -o '"tag_name": "[^"]*"' | head -1 \
         | sed 's/.*"tag_name": "//;s/"$//')
-    echo "$TAG"
+    rm -f /tmp/strema_api_body
+    LATEST_TAG="$TAG"
 }
 
 # Download and extract the strema archive into the current directory.
 # Sets SOURCE_DIR variable. Exits on failure.
 download_strema() {
     if [ "$VERSION" = "latest" ]; then
-        local LATEST_TAG
-        LATEST_TAG=$(get_latest_release)
-        if [ -n "$LATEST_TAG" ]; then
-            echo "Downloading latest stable release $LATEST_TAG..."
-            local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_TAG/strema-$LATEST_TAG.tar.gz"
-            curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
-                echo "❌ Download failed"
-                rm -rf "$TMP_DIR"
-                exit 1
-            }
-            tar -xzf strema.tar.gz
-            SOURCE_DIR="$RELEASE_DIR_NAME"
-        else
-            echo "⚠️  Could not determine any release (stable or pre-release), falling back to master..."
-            local ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/master.tar.gz"
-            curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
-                echo "❌ Download failed"
-                rm -rf "$TMP_DIR"
-                exit 1
-            }
-            tar -xzf strema.tar.gz
-            SOURCE_DIR="$REPO_BASE-master"
+        get_latest_release
+        if [ -n "$RATE_LIMITED" ]; then
+            echo "$RATE_LIMIT_MSG"
+            rm -rf "$TMP_DIR"
+            exit 1
         fi
-    elif [ "$VERSION" = "master" ]; then
-        echo "Downloading latest master branch..."
-        local ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/master.tar.gz"
+        if [ -z "$LATEST_TAG" ]; then
+            echo "❌ No releases found in $GITHUB_REPO."
+            echo "   This is unexpected — please report this issue."
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+        echo "Downloading latest release $LATEST_TAG..."
+        local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_TAG/strema-$LATEST_TAG.tar.gz"
         curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
             echo "❌ Download failed"
             rm -rf "$TMP_DIR"
             exit 1
         }
         tar -xzf strema.tar.gz
-        SOURCE_DIR="$REPO_BASE-master"
+        SOURCE_DIR="$RELEASE_DIR_NAME"
+    elif [ "$VERSION" = "master" ]; then
+        echo "❌ 'master' is not available for remote installation from $GITHUB_REPO."
+        echo "   The release repo only contains release archives, not source code."
+        echo "   Use 'latest' or a specific version (e.g. v0.0.1-beta.05)."
+        rm -rf "$TMP_DIR"
+        exit 1
     else
         echo "Downloading release $VERSION..."
         local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION.tar.gz"
@@ -279,11 +327,17 @@ fi
 if [ "$VERSION" = "master" ]; then
     echo "master" > "$INSTALL_DIR/VERSION"
 elif [ "$VERSION" = "latest" ]; then
-    LATEST_TAG=$(get_latest_release)
+    # Reuse LATEST_TAG from download_strema if available (remote install);
+    # otherwise query the API (git install path).
+    if [ -z "$LATEST_TAG" ]; then
+        get_latest_release
+    fi
     if [ -n "$LATEST_TAG" ]; then
         echo "${LATEST_TAG#v}" > "$INSTALL_DIR/VERSION"
     else
-        echo "master" > "$INSTALL_DIR/VERSION"
+        # Could not determine (rate limited or no releases) — use "unknown"
+        # rather than failing the whole install after a successful download.
+        echo "unknown" > "$INSTALL_DIR/VERSION"
     fi
 else
     # Specific version like v0.1.0 - strip 'v' prefix
@@ -342,9 +396,8 @@ echo "[4/5] Installing systemd services..."
 if [ ! -d "$SCRIPT_DIR/systemd" ] || [ -z "$(ls -A "$SCRIPT_DIR/systemd" 2>/dev/null)" ]; then
     echo "❌ Error: No systemd unit files found in $SCRIPT_DIR/systemd/"
     echo "   The downloaded archive appears to be incomplete."
-    echo "   This usually means the install fell back to a source-only archive"
-    echo "   instead of a proper release build. Try specifying a version explicitly:"
-    echo "     curl -fsSL https://raw.githubusercontent.com/gruz/strema-release/master/install.sh | bash -s v0.1.0-beta.7"
+    echo "   Try specifying a version explicitly:"
+    echo "     curl -fsSL https://raw.githubusercontent.com/gruz/strema-release/master/install.sh | bash -s v0.0.1-beta.05"
     exit 1
 fi
 for file in "$SCRIPT_DIR/systemd"/*; do
