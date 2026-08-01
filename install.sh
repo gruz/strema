@@ -148,7 +148,7 @@ download_strema() {
 VERSION="${1:-latest}"
 [ -z "$VERSION" ] && VERSION="latest"
 
-# Local install mode: use the source tree already present (e.g. pushed by debug_deploy.sh)
+# Local install mode: use the source tree already present (e.g. pushed by deploy.sh dev/test)
 LOCAL_INSTALL=false
 if [ "$VERSION" = "local" ]; then
     LOCAL_INSTALL=true
@@ -357,7 +357,7 @@ fi
 echo ""
 echo "[2/5] Installing system dependencies..."
 sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
-sudo apt-get install -y ffmpeg strace python3-flask iproute2 jq libpython3.11
+sudo apt-get install -y ffmpeg strace python3-flask iproute2 libpython3.11
 
 # Grant strace the CAP_SYS_PTRACE capability so the stream service (running
 # as a non-root user) can attach to the root-owned dzyga process to read
@@ -385,7 +385,7 @@ fi
 
 # Clean up old temporary files from previous versions (migration)
 sudo rm -f /tmp/dzyga_* 2>/dev/null || true
-# Remove dzyga MD5 cache so get_frequency.sh recalculates it on first call
+# Remove dzyga MD5 cache so get_frequency recalculates it on first call
 rm -f /tmp/dzyga.md5 2>/dev/null || true
 
 echo "✅ Files ready"
