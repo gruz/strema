@@ -144,6 +144,12 @@ if [ "$UDP_STATE" = "active" ] || [ "$UDP_STATE" = "activating" ] || [ "$UDP_STA
     echo "📝 UDP proxy is running - will restart after update"
 fi
 
+# Consume the marker files immediately. They are created by uninstall.sh to
+# carry service state across an uninstall→install cycle. If we leave them and
+# the install fails (set -e), a later install would see a stale marker and
+# start the stream even though the user had stopped it.
+rm -f /tmp/.forpost_stream_was_active /tmp/.forpost_udp_proxy_was_active 2>/dev/null || true
+
 # Stop all services except web interface (to allow online updates to complete)
 for service in forpost-stream forpost-udp-proxy forpost-stream-autorestart.timer \
                forpost-stream-config.path forpost-stream-watchdog.timer \
