@@ -148,7 +148,9 @@ fi
 # carry service state across an uninstall→install cycle. If we leave them and
 # the install fails (set -e), a later install would see a stale marker and
 # start the stream even though the user had stopped it.
-rm -f /tmp/.forpost_stream_was_active /tmp/.forpost_udp_proxy_was_active 2>/dev/null || true
+# NOTE: uninstall.sh runs as root (auto-elevates), so the markers are root-
+# owned. We need sudo to remove them.
+sudo rm -f /tmp/.forpost_stream_was_active /tmp/.forpost_udp_proxy_was_active 2>/dev/null || true
 
 # Stop all services except web interface (to allow online updates to complete)
 for service in forpost-stream forpost-udp-proxy forpost-stream-autorestart.timer \
@@ -378,7 +380,7 @@ if [ "$UDP_PROXY_WAS_ACTIVE" = "true" ]; then
     echo "Restarting UDP proxy service..."
     sudo systemctl start forpost-udp-proxy || true
 fi
-rm -f /tmp/.forpost_udp_proxy_was_active 2>/dev/null || true
+sudo rm -f /tmp/.forpost_udp_proxy_was_active 2>/dev/null || true
 
 if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
     echo "Restarting stream service..."
@@ -389,7 +391,7 @@ if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
         echo "⚠️  Stream service did not become active after start. It can be started manually from the web UI."
     fi
 fi
-rm -f /tmp/.forpost_stream_was_active 2>/dev/null || true
+sudo rm -f /tmp/.forpost_stream_was_active 2>/dev/null || true
 
 # Restart web service to pick up new code
 sudo systemctl restart forpost-stream-web
