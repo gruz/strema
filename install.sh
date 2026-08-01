@@ -336,13 +336,6 @@ for file in "$SCRIPT_DIR/systemd"/*; do
     fi
 done
 
-# If closed-source binaries are present, patch service files to use them
-if [ -x "$SCRIPT_DIR/scripts/strema" ]; then
-    echo "🛠  Patching systemd services for closed-source binaries..."
-    python3 "$SCRIPT_DIR/scripts/patch_systemd_for_binaries.py" \
-        /etc/systemd/system /etc/systemd/system "$SCRIPT_DIR"
-fi
-
 sudo systemctl daemon-reload
 
 # Start services
