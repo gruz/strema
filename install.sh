@@ -9,6 +9,12 @@
 
 set -e
 
+# Move to a safe directory early. When run via `curl | bash` the current
+# directory is typically ~/strema, which gets deleted later in this script
+# (sudo rm -rf "$INSTALL_DIR"). If we stay there, every subsequent getcwd()
+# call fails with "shell-init: error retrieving current directory".
+cd /tmp
+
 REPO_BASE="strema-release"
 GITHUB_REPO="gruz/$REPO_BASE"
 # Release archives (built by scripts/build_binaries.sh) extract to a folder
@@ -16,12 +22,29 @@ GITHUB_REPO="gruz/$REPO_BASE"
 # use the "<repo>-<branch>" naming convention.
 RELEASE_DIR_NAME="strema"
 
-# Helper to get the latest stable release tag from GitHub (no jq required)
+# Helper to get the latest stable release tag from GitHub (no jq required).
+# If no stable release exists (only pre-releases/betas), falls back to the
+# most recent pre-release. Returns empty only if there are no releases at all.
 get_latest_release() {
-    curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null \
+    # Try stable "latest" release first (excludes pre-releases)
+    local TAG
+    TAG=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null \
         | grep -o '"tag_name": "[^"]*"' \
         | head -1 \
-        | sed 's/.*"tag_name": "//;s/"$//'
+        | sed 's/.*"tag_name": "//;s/"$//')
+    if [ -n "$TAG" ]; then
+        echo "$TAG"
+        return
+    fi
+
+    # No stable release — fall back to the most recent pre-release.
+    # The /releases endpoint lists all releases (including pre-releases),
+    # most recent first.
+    TAG=$(curl -fsSL "https://api.github.com/repos/$GITHUB_REPO/releases?per_page=1" 2>/dev/null \
+        | grep -o '"tag_name": "[^"]*"' \
+        | head -1 \
+        | sed 's/.*"tag_name": "//;s/"$//')
+    echo "$TAG"
 }
 
 # Download and extract the strema archive into the current directory.
@@ -41,7 +64,7 @@ download_strema() {
             tar -xzf strema.tar.gz
             SOURCE_DIR="$RELEASE_DIR_NAME"
         else
-            echo "⚠️  Could not determine latest release, falling back to master..."
+            echo "⚠️  Could not determine any release (stable or pre-release), falling back to master..."
             local ARCHIVE_URL="https://github.com/$GITHUB_REPO/archive/refs/heads/master.tar.gz"
             curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
                 echo "❌ Download failed"
@@ -294,6 +317,14 @@ echo "✅ Files ready"
 # Install systemd services
 echo ""
 echo "[4/5] Installing systemd services..."
+if [ ! -d "$SCRIPT_DIR/systemd" ] || [ -z "$(ls -A "$SCRIPT_DIR/systemd" 2>/dev/null)" ]; then
+    echo "❌ Error: No systemd unit files found in $SCRIPT_DIR/systemd/"
+    echo "   The downloaded archive appears to be incomplete."
+    echo "   This usually means the install fell back to a source-only archive"
+    echo "   instead of a proper release build. Try specifying a version explicitly:"
+    echo "     curl -fsSL https://raw.githubusercontent.com/gruz/strema-release/master/install.sh | bash -s v0.1.0-beta.7"
+    exit 1
+fi
 for file in "$SCRIPT_DIR/systemd"/*; do
     [ -f "$file" ] || continue
     name=$(basename "$file")
