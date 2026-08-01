@@ -314,6 +314,12 @@ chmod +x "$SCRIPT_DIR/web/"web_config.py 2>/dev/null || true
 # Remove any leftover source / debug artifacts from closed releases
 rm -rf "$SCRIPT_DIR/.git" 2>/dev/null || true
 mkdir -p "$SCRIPT_DIR/logs"
+# Migrate log ownership: stream and udp-proxy services now run as rpidrone
+# (previously as root), so old root-owned log files must be re-owned to let
+# the services append to and rotate them.
+if [ -n "$REAL_USER" ]; then
+    sudo chown -R "$REAL_USER:$REAL_USER" "$SCRIPT_DIR/logs" 2>/dev/null || true
+fi
 
 # Clean up old temporary files from previous versions (migration)
 sudo rm -f /tmp/dzyga_* 2>/dev/null || true
