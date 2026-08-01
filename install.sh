@@ -305,6 +305,14 @@ echo "[2/5] Installing system dependencies..."
 sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
 sudo apt-get install -y ffmpeg strace python3-flask iproute2 jq libpython3.11
 
+# Grant strace the CAP_SYS_PTRACE capability so the stream service (running
+# as a non-root user) can attach to the root-owned dzyga process to read
+# frequency via strace. Without this, get_frequency would need sudo on every
+# call (every 2 seconds), flooding the journal with sudo log entries.
+# libcap2-bin provides setcap/getcap; install silently if missing.
+sudo dpkg -s libcap2-bin >/dev/null 2>&1 || sudo apt-get install -y libcap2-bin 2>/dev/null || true
+sudo setcap cap_sys_ptrace+ep /usr/bin/strace 2>/dev/null || echo "⚠️  Could not set CAP_SYS_PTRACE on strace (frequency detection may need sudo)"
+
 # Prepare project files
 echo ""
 echo "[3/5] Preparing project files..."
