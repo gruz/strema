@@ -458,7 +458,13 @@ if [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
     # as root already; here we're invoked from install.sh as the regular
     # user, so elevate explicitly.
     if [ -x "$SCRIPT_DIR/scripts/strema" ]; then
-        sudo "$SCRIPT_DIR/scripts/strema" handle_config_change 2>/dev/null || true
+        # The strema binary can't derive its install dir from __file__ (it's
+        # a bundled Nuitka onefile executable), so it relies on
+        # STREMA_INSTALL_DIR — normally set by patch_systemd_for_binaries.py
+        # in the systemd unit files, but this direct invocation from
+        # install.sh needs it set explicitly too, or it silently can't find
+        # config/stream.conf and skips applying autostart settings.
+        sudo STREMA_INSTALL_DIR="$SCRIPT_DIR" "$SCRIPT_DIR/scripts/strema" handle_config_change 2>/dev/null || true
     else
         sudo python3 "$SCRIPT_DIR/scripts/handle_config_change.py" 2>/dev/null || true
     fi
