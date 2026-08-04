@@ -3,8 +3,8 @@
 # Installs dependencies and configures systemd service
 #
 # Usage:
-#   Remote install:    curl -fsSL https://raw.githubusercontent.com/gruz/strema-release/master/install.sh | bash
-#   Specific version:  curl -fsSL https://raw.githubusercontent.com/gruz/strema-release/master/install.sh | bash -s v0.1.0
+#   Remote install:    curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash
+#   Specific version:  curl -fsSL https://raw.githubusercontent.com/gruz/strema/master/install.sh | bash -s v0.1.0
 #   Local install:     ./install.sh
 
 set -e
@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # call fails with "shell-init: error retrieving current directory".
 cd /tmp
 
-REPO_BASE="strema-release"
+REPO_BASE="strema"
 GITHUB_REPO="gruz/$REPO_BASE"
 # Release archives (built by scripts/build_binaries.sh) extract to a folder
 # named "strema" regardless of the repo name. GitHub source archives instead
