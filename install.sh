@@ -9,6 +9,12 @@
 
 set -e
 
+# Resolve the script's own directory to an ABSOLUTE path before any cd.
+# We need this later (e.g. for local install mode), but BASH_SOURCE[0] may
+# be a relative path (like "./strema/install.sh"). Once we `cd /tmp` below,
+# that relative path would no longer resolve, so capture it now.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Move to a safe directory early. When run via `curl | bash` the current
 # directory is typically ~/strema, which gets deleted later in this script
 # (sudo rm -rf "$INSTALL_DIR"). If we stay there, every subsequent getcwd()
@@ -132,6 +138,12 @@ download_strema() {
         echo "   Use 'latest' or a specific version (e.g. v0.0.1-beta.05)."
         rm -rf "$TMP_DIR"
         exit 1
+    elif [ -f "$VERSION" ]; then
+        # Install from a local archive (e.g. built via build_binaries.sh / build_in_docker.sh)
+        echo "Installing from local archive: $VERSION"
+        cp "$VERSION" strema.tar.gz
+        tar -xzf strema.tar.gz
+        SOURCE_DIR="$RELEASE_DIR_NAME"
     else
         echo "Downloading release $VERSION..."
         local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION.tar.gz"
@@ -183,11 +195,11 @@ STREAM_WAS_ACTIVE=false
 UDP_PROXY_WAS_ACTIVE=false
 STREAM_STATE=$(sudo systemctl is-active forpost-stream 2>/dev/null || true)
 UDP_STATE=$(sudo systemctl is-active forpost-udp-proxy 2>/dev/null || true)
-if [ "$STREAM_STATE" = "active" ] || [ "$STREAM_STATE" = "activating" ] || [ "$STREAM_STATE" = "reloading" ] || [ -f /tmp/.forpost_stream_was_active ]; then
+if [ "$STREAM_STATE" = "active" ] || [ "$STREAM_STATE" = "activating" ] || [ "$STREAM_STATE" = "reloading" ] || [ -f /tmp/.strema_stream_was_active ]; then
     STREAM_WAS_ACTIVE=true
     echo "📝 Stream service is running - will restart after update"
 fi
-if [ "$UDP_STATE" = "active" ] || [ "$UDP_STATE" = "activating" ] || [ "$UDP_STATE" = "reloading" ] || [ -f /tmp/.forpost_udp_proxy_was_active ]; then
+if [ "$UDP_STATE" = "active" ] || [ "$UDP_STATE" = "activating" ] || [ "$UDP_STATE" = "reloading" ] || [ -f /tmp/.strema_udp_proxy_was_active ]; then
     UDP_PROXY_WAS_ACTIVE=true
     echo "📝 UDP proxy is running - will restart after update"
 fi
@@ -198,7 +210,7 @@ fi
 # start the stream even though the user had stopped it.
 # NOTE: uninstall.sh runs as root (auto-elevates), so the markers are root-
 # owned. We need sudo to remove them.
-sudo rm -f /tmp/.forpost_stream_was_active /tmp/.forpost_udp_proxy_was_active 2>/dev/null || true
+sudo rm -f /tmp/.strema_stream_was_active /tmp/.strema_udp_proxy_was_active 2>/dev/null || true
 
 # Stop all services except web interface (to allow online updates to complete)
 for service in forpost-stream forpost-udp-proxy forpost-stream-autorestart.timer \
@@ -221,7 +233,8 @@ done
 sudo systemctl daemon-reload
 
 # Now analyze what we have and what to do
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# (SCRIPT_DIR was resolved to an absolute path at the top of the script,
+#  before the `cd /tmp` that makes relative BASH_SOURCE paths unresolvable.)
 
 # In local install mode we use the source tree already on the device
 if [ "$LOCAL_INSTALL" = "true" ]; then
@@ -346,18 +359,11 @@ fi
 
 SCRIPT_DIR="$INSTALL_DIR"
 
-# install.sh already restores stream.conf from backup above; make sure it
-# is owned by the real user because the web service (User=rpidrone) needs
-# write access and this script runs as root during remote updates.
-if [ -f "$SCRIPT_DIR/config/stream.conf" ] && [ -n "$REAL_USER" ]; then
-    chown "$REAL_USER:" "$SCRIPT_DIR/config/stream.conf" 2>/dev/null || true
-fi
-
 # Install dependencies (requires sudo)
 echo ""
 echo "[2/5] Installing system dependencies..."
 sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
-sudo apt-get install -y ffmpeg strace python3-flask iproute2 libpython3.11
+sudo apt-get install -y ffmpeg strace python3-flask iproute2 libpython3.11 inotify-tools
 
 # Grant strace the CAP_SYS_PTRACE capability so the stream service (running
 # as a non-root user) can attach to the root-owned dzyga process to read
@@ -376,17 +382,29 @@ chmod +x "$SCRIPT_DIR/web/"web_config.py 2>/dev/null || true
 # Remove any leftover source / debug artifacts from closed releases
 rm -rf "$SCRIPT_DIR/.git" 2>/dev/null || true
 mkdir -p "$SCRIPT_DIR/logs"
-# Migrate log ownership: stream and udp-proxy services now run as rpidrone
-# (previously as root), so old root-owned log files must be re-owned to let
-# the services append to and rotate them.
+
+# Ensure the entire project tree is owned by the real user.
+# When install.sh runs via sudo (remote install, curl|bash, deploy.sh), file
+# operations (mv, mkdir, chmod) execute as root and leave root-owned files.
+# The web and stream services run as $REAL_USER and need write access to
+# config/, logs/, and the state file in /tmp. A single recursive chown here
+# supersedes the per-file chown calls that previously only fixed stream.conf
+# and logs/ individually.
 if [ -n "$REAL_USER" ]; then
-    sudo chown -R "$REAL_USER:$REAL_USER" "$SCRIPT_DIR/logs" 2>/dev/null || true
+    sudo chown -R "$REAL_USER:$REAL_USER" "$SCRIPT_DIR" 2>/dev/null || true
 fi
 
-# Clean up old temporary files from previous versions (migration)
-sudo rm -f /tmp/dzyga_* 2>/dev/null || true
-# Remove dzyga MD5 cache so get_frequency recalculates it on first call
-rm -f /tmp/dzyga.md5 2>/dev/null || true
+# Clean up our temp files from previous run. Do NOT remove
+# /tmp/dzyga_freq_current.txt — dzyga creates it only on frequency change,
+# so deleting it would leave us blind until the next frequency change.
+sudo rm -f /tmp/strema_freq.txt /tmp/strema_scanning_state.txt \
+          /tmp/strema_dynamic_overlay.txt /tmp/strema_last_freq_dynamic.txt \
+          /tmp/strema_stream.state /tmp/strema_dzyga.md5 \
+          /tmp/strema_config_snapshot.conf 2>/dev/null || true
+# Also clean up old-name files from previous versions (migration)
+sudo rm -f /tmp/dzyga_freq.txt /tmp/dzyga_scanning_state.txt \
+          /tmp/dzyga_dynamic_overlay.txt /tmp/dzyga_last_freq_dynamic.txt \
+          /tmp/dzyga.md5 /tmp/forpost_config_snapshot.conf 2>/dev/null || true
 
 echo "✅ Files ready"
 
@@ -432,13 +450,17 @@ sudo systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
 
 # Apply configuration settings (autostart, auto-restart, etc.)
 # Remove snapshot so handle_config_change.sh re-applies all settings from config
-rm -f /tmp/forpost_config_snapshot.conf 2>/dev/null || true
+rm -f /tmp/strema_config_snapshot.conf 2>/dev/null || true
 if [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
     echo "Applying configuration settings..."
-    if [ -x "$SCRIPT_DIR/scripts/handle_config_change" ]; then
-        "$SCRIPT_DIR/scripts/handle_config_change" 2>/dev/null || true
+    # handle_config_change.py runs `systemctl enable/disable`, which needs
+    # root. When invoked from systemd (forpost-stream-config.service) it runs
+    # as root already; here we're invoked from install.sh as the regular
+    # user, so elevate explicitly.
+    if [ -x "$SCRIPT_DIR/scripts/strema" ]; then
+        sudo "$SCRIPT_DIR/scripts/strema" handle_config_change 2>/dev/null || true
     else
-        python3 "$SCRIPT_DIR/scripts/handle_config_change.py" 2>/dev/null || true
+        sudo python3 "$SCRIPT_DIR/scripts/handle_config_change.py" 2>/dev/null || true
     fi
 fi
 
@@ -447,7 +469,7 @@ if [ "$UDP_PROXY_WAS_ACTIVE" = "true" ]; then
     echo "Restarting UDP proxy service..."
     sudo systemctl start forpost-udp-proxy || true
 fi
-sudo rm -f /tmp/.forpost_udp_proxy_was_active 2>/dev/null || true
+sudo rm -f /tmp/.strema_udp_proxy_was_active 2>/dev/null || true
 
 if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
     echo "Restarting stream service..."
@@ -458,7 +480,7 @@ if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
         echo "⚠️  Stream service did not become active after start. It can be started manually from the web UI."
     fi
 fi
-sudo rm -f /tmp/.forpost_stream_was_active 2>/dev/null || true
+sudo rm -f /tmp/.strema_stream_was_active 2>/dev/null || true
 
 # Restart web service to pick up new code
 sudo systemctl restart forpost-stream-web
