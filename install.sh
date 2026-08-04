@@ -51,7 +51,7 @@ check_rate_limit() {
    Options:
      1. Wait and retry
      2. Install a specific version (bypasses the API):
-        curl -fsSL https://raw.githubusercontent.com/gruz/strema-release/master/install.sh | bash -s v0.0.1-beta.05"
+        curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/master/install.sh | bash -s v0.0.1-beta.05"
             else
                 RATE_LIMIT_MSG="❌ GitHub API rate limit exhausted. Please wait and retry."
             fi
@@ -415,7 +415,7 @@ if [ ! -d "$SCRIPT_DIR/systemd" ] || [ -z "$(ls -A "$SCRIPT_DIR/systemd" 2>/dev/
     echo "❌ Error: No systemd unit files found in $SCRIPT_DIR/systemd/"
     echo "   The downloaded archive appears to be incomplete."
     echo "   Try specifying a version explicitly:"
-    echo "     curl -fsSL https://raw.githubusercontent.com/gruz/strema-release/master/install.sh | bash -s v0.0.1-beta.05"
+    echo "     curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/master/install.sh | bash -s v0.0.1-beta.05"
     exit 1
 fi
 for file in "$SCRIPT_DIR/systemd"/*; do
