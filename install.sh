@@ -397,10 +397,7 @@ fi
 # Clean up our temp files from previous run. Do NOT remove
 # /tmp/dzyga_freq_current.txt — dzyga creates it only on frequency change,
 # so deleting it would leave us blind until the next frequency change.
-sudo rm -f /tmp/strema_freq.txt /tmp/strema_scanning_state.txt \
-          /tmp/strema_dynamic_overlay.txt /tmp/strema_last_freq_dynamic.txt \
-          /tmp/strema_stream.state /tmp/strema_dzyga.md5 \
-          /tmp/strema_config_snapshot.conf 2>/dev/null || true
+sudo rm -f /tmp/strema_* 2>/dev/null || true
 # Also clean up old-name files from previous versions (migration)
 sudo rm -f /tmp/dzyga_freq.txt /tmp/dzyga_scanning_state.txt \
           /tmp/dzyga_dynamic_overlay.txt /tmp/dzyga_last_freq_dynamic.txt \
