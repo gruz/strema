@@ -372,7 +372,7 @@ SCRIPT_DIR="$INSTALL_DIR"
 echo ""
 echo "[2/5] Installing system dependencies..."
 sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
-sudo apt-get install -y ffmpeg strace python3-flask python3-socketio iproute2 libpython3.11 inotify-tools
+sudo apt-get install -y ffmpeg strace python3-flask python3-socketio iproute2 libpython3.11 inotify-tools python3-grpcio python3-protobuf
 
 # Grant strace the CAP_SYS_PTRACE capability so the stream service (running
 # as a non-root user) can attach to the root-owned dzyga process to read
