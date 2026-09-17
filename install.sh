@@ -309,10 +309,14 @@ elif [ "$LOCAL_INSTALL" != "true" ]; then
         echo "🌐 Remote installation - fresh install"
     fi
     
-    # Backup config if it exists (safe to call even when file is missing)
+    # Backup config and logs if they exist (safe to call even when missing)
     if [ -f "$INSTALL_DIR/config/stream.conf" ]; then
         TMP_BACKUP="/tmp/strema_config_backup_$$"
         cp "$INSTALL_DIR/config/stream.conf" "$TMP_BACKUP"
+    fi
+    if [ -d "$INSTALL_DIR/logs" ]; then
+        TMP_LOGS_BACKUP="/tmp/strema_logs_backup_$$"
+        cp -a "$INSTALL_DIR/logs" "$TMP_LOGS_BACKUP" 2>/dev/null || TMP_LOGS_BACKUP=""
     fi
     
     # Download and extract
@@ -325,10 +329,15 @@ elif [ "$LOCAL_INSTALL" != "true" ]; then
     mkdir -p "$REAL_HOME"
     mv "$SOURCE_DIR" "$INSTALL_DIR"
     
-    # Restore config if backup was created
+    # Restore config and logs if backups were created
     if [ -n "$TMP_BACKUP" ] && [ -f "$TMP_BACKUP" ]; then
         cp "$TMP_BACKUP" "$INSTALL_DIR/config/stream.conf"
         rm -f "$TMP_BACKUP"
+    fi
+    if [ -n "$TMP_LOGS_BACKUP" ] && [ -d "$TMP_LOGS_BACKUP" ]; then
+        mkdir -p "$INSTALL_DIR/logs"
+        cp -a "$TMP_LOGS_BACKUP/." "$INSTALL_DIR/logs/"
+        rm -rf "$TMP_LOGS_BACKUP"
     fi
     
     cd "$REAL_HOME"
