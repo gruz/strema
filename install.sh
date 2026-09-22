@@ -314,6 +314,10 @@ elif [ "$LOCAL_INSTALL" != "true" ]; then
         TMP_BACKUP="/tmp/strema_config_backup_$$"
         cp "$INSTALL_DIR/config/stream.conf" "$TMP_BACKUP"
     fi
+    if [ -f "$INSTALL_DIR/config/fleet.conf" ]; then
+        TMP_FLEET_BACKUP="/tmp/strema_fleet_config_backup_$$"
+        cp "$INSTALL_DIR/config/fleet.conf" "$TMP_FLEET_BACKUP"
+    fi
     if [ -d "$INSTALL_DIR/logs" ]; then
         TMP_LOGS_BACKUP="/tmp/strema_logs_backup_$$"
         cp -a "$INSTALL_DIR/logs" "$TMP_LOGS_BACKUP" 2>/dev/null || TMP_LOGS_BACKUP=""
@@ -333,6 +337,10 @@ elif [ "$LOCAL_INSTALL" != "true" ]; then
     if [ -n "$TMP_BACKUP" ] && [ -f "$TMP_BACKUP" ]; then
         cp "$TMP_BACKUP" "$INSTALL_DIR/config/stream.conf"
         rm -f "$TMP_BACKUP"
+    fi
+    if [ -n "$TMP_FLEET_BACKUP" ] && [ -f "$TMP_FLEET_BACKUP" ]; then
+        cp "$TMP_FLEET_BACKUP" "$INSTALL_DIR/config/fleet.conf"
+        rm -f "$TMP_FLEET_BACKUP"
     fi
     if [ -n "$TMP_LOGS_BACKUP" ] && [ -d "$TMP_LOGS_BACKUP" ]; then
         mkdir -p "$INSTALL_DIR/logs"
