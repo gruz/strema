@@ -382,6 +382,20 @@ echo "[2/5] Installing system dependencies..."
 sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
 sudo apt-get install -y ffmpeg strace python3-flask iproute2 libpython3.11 inotify-tools python3-grpcio python3-protobuf
 
+# VPN tooling used by the web UI and fleet discovery. Older devices may lack
+# these, so install them here (failures are non-fatal — VPN is optional).
+# The WireGuard kernel module is in-tree since 5.6, so wireguard-tools (wg,
+# wg-quick) is all we need.
+sudo apt-get install -y wireguard-tools 2>/dev/null || echo "⚠️  wireguard-tools install failed"
+# tailscale is only packaged in newer Debian releases; fall back to the
+# official installer (adds their apt repo) on older ones.
+if ! command -v tailscale >/dev/null 2>&1; then
+    sudo apt-get install -y tailscale 2>/dev/null \
+        || curl -fsSL https://tailscale.com/install.sh | sudo sh \
+        || echo "⚠️  Tailscale install failed"
+fi
+sudo systemctl enable --now tailscaled 2>/dev/null || true
+
 # Grant strace the CAP_SYS_PTRACE capability so the stream service (running
 # as a non-root user) can attach to the root-owned dzyga process to read
 # frequency via strace. Without this, get_frequency would need sudo on every
@@ -421,6 +435,39 @@ sudo rm -f /tmp/dzyga_freq.txt /tmp/dzyga_scanning_state.txt \
           /tmp/dzyga.md5 /tmp/forpost_config_snapshot.conf 2>/dev/null || true
 
 echo "✅ Files ready"
+
+# Fleet operator account 'stremaadm': SSH login restricted to `strema
+# fleet-admin` commands, executed as $REAL_USER through a sudoers whitelist.
+# The account itself has no sudo rights and no access to the service user's
+# files. Password is the fleet-wide documented default; change it anytime
+# with `sudo passwd stremaadm`.
+STREMAADM_SHELL=/usr/local/bin/stremaadm-shell
+if [ -f "$SCRIPT_DIR/scripts/stremaadm_shell.sh" ]; then
+    sudo sed -e "s|__INSTALL_DIR__|$SCRIPT_DIR|g" -e "s|__REAL_USER__|$REAL_USER|g" \
+        "$SCRIPT_DIR/scripts/stremaadm_shell.sh" > /tmp/stremaadm-shell.$$
+    sudo mv "/tmp/stremaadm-shell.$$" "$STREMAADM_SHELL"
+    sudo chmod 755 "$STREMAADM_SHELL"
+    if ! id stremaadm >/dev/null 2>&1; then
+        sudo useradd -m -s "$STREMAADM_SHELL" stremaadm \
+            || echo "⚠️  Could not create stremaadm user"
+    else
+        sudo usermod -s "$STREMAADM_SHELL" stremaadm || true
+    fi
+    echo 'stremaadm:dzyga123' | sudo chpasswd || true
+    SUDOERS_TMP=$(mktemp)
+    cat > "$SUDOERS_TMP" <<EOF
+stremaadm ALL=($REAL_USER) NOPASSWD: $SCRIPT_DIR/scripts/strema fleet-admin, $SCRIPT_DIR/scripts/strema fleet-admin *
+stremaadm ALL=($REAL_USER) NOPASSWD: /usr/bin/python3 $SCRIPT_DIR/scripts/strema.py fleet-admin, /usr/bin/python3 $SCRIPT_DIR/scripts/strema.py fleet-admin *
+EOF
+    chmod 440 "$SUDOERS_TMP"
+    if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
+        sudo mv "$SUDOERS_TMP" /etc/sudoers.d/strema-fleet
+        echo "✅ stremaadm fleet-admin account ready (login: stremaadm)"
+    else
+        rm -f "$SUDOERS_TMP"
+        echo "⚠️  strema-fleet sudoers failed validation — skipping"
+    fi
+fi
 
 # Install systemd services
 echo ""
