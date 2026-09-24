@@ -455,13 +455,17 @@ if [ -f "$SCRIPT_DIR/scripts/stremaadm_shell.sh" ]; then
     fi
     echo 'stremaadm:dzyga123' | sudo chpasswd || true
     SUDOERS_TMP=$(mktemp)
+    # Single whitelisted entry point — it dispatches to the strema binary or
+    # strema.py itself, so the rule works for both release and source trees.
     cat > "$SUDOERS_TMP" <<EOF
-stremaadm ALL=($REAL_USER) NOPASSWD: $SCRIPT_DIR/scripts/strema fleet-admin, $SCRIPT_DIR/scripts/strema fleet-admin *
-stremaadm ALL=($REAL_USER) NOPASSWD: /usr/bin/python3 $SCRIPT_DIR/scripts/strema.py fleet-admin, /usr/bin/python3 $SCRIPT_DIR/scripts/strema.py fleet-admin *
+stremaadm ALL=($REAL_USER) NOPASSWD: $SCRIPT_DIR/scripts/fleet_admin_entry.sh, $SCRIPT_DIR/scripts/fleet_admin_entry.sh *
 EOF
     chmod 440 "$SUDOERS_TMP"
     if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
-        sudo mv "$SUDOERS_TMP" /etc/sudoers.d/strema-fleet
+        # install(1) sets root ownership — sudo ignores sudoers.d files
+        # not owned by root.
+        sudo install -o root -g root -m 440 "$SUDOERS_TMP" /etc/sudoers.d/strema-fleet
+        rm -f "$SUDOERS_TMP"
         echo "✅ stremaadm fleet-admin account ready (login: stremaadm)"
     else
         rm -f "$SUDOERS_TMP"
