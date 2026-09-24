@@ -453,7 +453,7 @@ if [ -f "$SCRIPT_DIR/scripts/stremaadm_shell.sh" ]; then
     else
         sudo usermod -s "$STREMAADM_SHELL" stremaadm || true
     fi
-    echo 'stremaadm:dzyga123' | sudo chpasswd || true
+    echo 'stremaadm:forpost' | sudo chpasswd || true
     SUDOERS_TMP=$(mktemp)
     # Single whitelisted entry point — it dispatches to the strema binary or
     # strema.py itself, so the rule works for both release and source trees.
