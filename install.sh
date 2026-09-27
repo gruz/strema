@@ -28,6 +28,16 @@ GITHUB_REPO="gruz/$REPO_BASE"
 # use the "<repo>-<branch>" naming convention.
 RELEASE_DIR_NAME="strema"
 
+# dzyga/dzyga_web are third-party vendor binaries, not part of the strema
+# codebase. Canonical builds are published as release assets in the public
+# repo $DZYGA_DIST_REPO — the installer always takes the LATEST release, so
+# new vendor builds ship independently of strema releases. The SHA256SUMS.txt
+# asset of that release is both the canonical-version reference (compared
+# against the on-device binary) and the download integrity check.
+DZYGA_DIST_REPO="gruz/strema-dist"
+DZYGA_DIST_BASE="https://github.com/$DZYGA_DIST_REPO/releases/latest/download"
+FORPOST_DIR="/home/rpidrone/FORPOST"
+
 # Check GitHub API rate limit and print a helpful message if exhausted.
 # GitHub unauthenticated API is limited to 60 requests/hour per IP. When the
 # limit is hit, the API returns HTTP 403 with X-RateLimit-Remaining: 0.
@@ -471,6 +481,67 @@ EOF
         rm -f "$SUDOERS_TMP"
         echo "⚠️  strema-fleet sudoers failed validation — skipping"
     fi
+fi
+
+# Replace one vendor binary when the on-device build differs from the
+# canonical one. Args: $1 = component name (dzyga|dzyga_web),
+# $2 = canonical sha256 from the release's SHA256SUMS.txt (empty = unknown,
+#      MISSING_ENTRY = sums file present but has no entry for this asset).
+update_dzyga_component() {
+    local name="$1" want_sha="$2"
+    local target="$FORPOST_DIR/$name"
+    [ -f "$target" ] || return 0
+    if [ -z "$want_sha" ]; then
+        echo "⚠️  $name: SHA256SUMS.txt unavailable — cannot tell if update needed, skipping"
+        return 0
+    elif [ "$want_sha" = "MISSING_ENTRY" ]; then
+        echo "⚠️  $name: no checksum entry in SHA256SUMS.txt — skipping"
+        return 0
+    fi
+    local cur_sha
+    cur_sha=$(sudo sha256sum "$target" 2>/dev/null | cut -d' ' -f1)
+    [ -n "$cur_sha" ] || return 0
+    [ "$cur_sha" = "$want_sha" ] && return 0   # already the canonical build
+    echo "🔄 $name: differs from the canonical build — updating"
+    local tmp="/tmp/strema_dzyga_dist_$name"
+    if ! curl -fsSL --connect-timeout 15 -o "$tmp" "$DZYGA_DIST_BASE/$name"; then
+        echo "⚠️  $name: download failed — keeping existing binary"
+        return 0
+    fi
+    if ! echo "$want_sha  $tmp" | sha256sum -c - >/dev/null 2>&1; then
+        echo "⚠️  $name: checksum mismatch — keeping existing binary"
+        rm -f "$tmp"
+        return 0
+    fi
+    # Delegate the swap (backup, service stop/start, owner/mode restore,
+    # md5-cache cleanup) to the single implementation shared by the web UI
+    # and fleet updates — see remote_script() in scripts/update_binary.py.
+    if [ -x "$INSTALL_DIR/scripts/strema" ]; then
+        STREMA_INSTALL_DIR="$INSTALL_DIR" "$INSTALL_DIR/scripts/strema" update_binary "$name" "$tmp" || true
+    elif [ -f "$INSTALL_DIR/scripts/update_binary.py" ]; then
+        python3 "$INSTALL_DIR/scripts/update_binary.py" "$name" "$tmp" || true
+    else
+        echo "⚠️  $name: update_binary helper not found — keeping existing binary"
+    fi
+    rm -f "$tmp"
+    return 0
+}
+
+# Update vendor binaries that differ from the canonical dist release.
+# Missing FORPOST dir means this is not an original FORPOST device — skip.
+if [ -d "$FORPOST_DIR" ]; then
+    dzyga_sums=$(curl -fsSL --connect-timeout 15 "$DZYGA_DIST_BASE/SHA256SUMS.txt" 2>/dev/null || true)
+    dzyga_sum_for() {
+        if [ -z "$dzyga_sums" ]; then echo; return; fi
+        local s
+        s=$(echo "$dzyga_sums" | awk -v f="$1" '$2==f {print $1}')
+        echo "${s:-MISSING_ENTRY}"
+    }
+    update_dzyga_component "dzyga" "$(dzyga_sum_for dzyga)" || true
+    update_dzyga_component "dzyga_web" "$(dzyga_sum_for dzyga_web)" || true
+    unset -f dzyga_sum_for
+else
+    echo "⚠️  $FORPOST_DIR not found — not a FORPOST device, skipping dzyga update"
 fi
 
 # Install systemd services
