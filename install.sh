@@ -23,7 +23,7 @@ cd /tmp
 
 REPO_BASE="strema"
 GITHUB_REPO="gruz/$REPO_BASE"
-# Release archives (built by scripts/build_binaries.sh) extract to a folder
+# Release archives (built by tools/build_binaries.sh) extract to a folder
 # named "strema" regardless of the repo name. GitHub source archives instead
 # use the "<repo>-<branch>" naming convention.
 RELEASE_DIR_NAME="strema"
@@ -202,16 +202,10 @@ fi
 echo ""
 echo "[1/5] Stopping and removing old services..."
 STREAM_WAS_ACTIVE=false
-UDP_PROXY_WAS_ACTIVE=false
 STREAM_STATE=$(sudo systemctl is-active forpost-stream 2>/dev/null || true)
-UDP_STATE=$(sudo systemctl is-active forpost-udp-proxy 2>/dev/null || true)
 if [ "$STREAM_STATE" = "active" ] || [ "$STREAM_STATE" = "activating" ] || [ "$STREAM_STATE" = "reloading" ] || [ -f /tmp/.strema_stream_was_active ]; then
     STREAM_WAS_ACTIVE=true
     echo "📝 Stream service is running - will restart after update"
-fi
-if [ "$UDP_STATE" = "active" ] || [ "$UDP_STATE" = "activating" ] || [ "$UDP_STATE" = "reloading" ] || [ -f /tmp/.strema_udp_proxy_was_active ]; then
-    UDP_PROXY_WAS_ACTIVE=true
-    echo "📝 UDP proxy is running - will restart after update"
 fi
 
 # Consume the marker files immediately. They are created by uninstall.sh to
@@ -225,7 +219,7 @@ sudo rm -f /tmp/.strema_stream_was_active /tmp/.strema_udp_proxy_was_active 2>/d
 # Stop all services except web interface (to allow online updates to complete)
 for service in forpost-stream forpost-udp-proxy forpost-stream-autorestart.timer \
                forpost-stream-config.path forpost-stream-watchdog.timer \
-               forpost-power-settings; do
+               forpost-power-settings forpost-mediamtx forpost-capture; do
     sudo systemctl stop "$service" 2>/dev/null || true
     sudo systemctl disable "$service" 2>/dev/null || true
 done
@@ -239,6 +233,24 @@ for service_file in /etc/systemd/system/forpost-*.service /etc/systemd/system/fo
         sudo rm -f "$service_file"
     fi
 done
+
+# --- Update hygiene: artifacts left behind by older versions -----------
+# Drop-in directories for units that were renamed or removed — the glob
+# above only deletes files, not <unit>.d directories.
+for dropin in /etc/systemd/system/forpost-*.service.d /etc/systemd/system/forpost-*.timer.d; do
+    [ -d "$dropin" ] || continue
+    sudo rm -rf "$dropin"
+done
+# Orphaned wants/requires symlinks: `systemctl disable` only removes
+# symlinks for units it can still load; once a unit file is gone they stay
+# behind and keep the unit visible as "not-found".
+sudo find /etc/systemd/system -type l \( -path '*.wants/*' -o -path '*.requires/*' \) \
+    -name 'forpost-*' -delete 2>/dev/null || true
+# Phantom masks and residual failed-state records from removed units —
+# a mask symlink at the unit path was deleted above, but units masked by
+# very old versions may also linger in systemd's runtime state.
+sudo systemctl unmask 'forpost-*' 2>/dev/null || true
+sudo systemctl reset-failed 'forpost-*' 2>/dev/null || true
 
 sudo systemctl daemon-reload
 
@@ -390,7 +402,7 @@ SCRIPT_DIR="$INSTALL_DIR"
 echo ""
 echo "[2/5] Installing system dependencies..."
 sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
-sudo apt-get install -y ffmpeg strace python3-flask iproute2 libpython3.11 inotify-tools python3-grpcio python3-protobuf
+sudo apt-get install -y ffmpeg strace python3-flask python3-markdown iproute2 libpython3.11 inotify-tools python3-grpcio python3-protobuf v4l2-utils sqlite3
 
 # VPN tooling used by the web UI and fleet discovery. Older devices may lack
 # these, so install them here (failures are non-fatal — VPN is optional).
@@ -420,9 +432,39 @@ echo "[3/5] Preparing project files..."
 chmod +x "$SCRIPT_DIR/scripts/"*.sh 2>/dev/null || true
 chmod +x "$SCRIPT_DIR/scripts/"*.py 2>/dev/null || true
 chmod +x "$SCRIPT_DIR/web/"web_config.py 2>/dev/null || true
+
+# MediaMTX (the device's RTSP server) is not part of the release tarball —
+# every install/update already requires internet for the archive itself, so
+# the pinned binary is downloaded here and checksum-verified. Failure is
+# non-fatal: forpost-mediamtx.service has ConditionPathExists and the
+# legacy rtsp-server is masked unconditionally — forpost-capture always
+# owns the camera, so only the RTSP mounts stay dead on a failed download.
+# STREMA_INSTALL_DIR is required when the binary runs outside systemd (see
+# the handle_config_change call below for the rationale).
+if [ -x "$SCRIPT_DIR/scripts/strema" ]; then
+    sudo STREMA_INSTALL_DIR="$SCRIPT_DIR" "$SCRIPT_DIR/scripts/strema" install_mediamtx || true
+else
+    sudo python3 "$SCRIPT_DIR/scripts/install_mediamtx.py" || true
+fi
 # Remove any leftover source / debug artifacts from closed releases
 rm -rf "$SCRIPT_DIR/.git" 2>/dev/null || true
+# Stale bytecode caches — matters on local/dev installs where the tree is
+# reused across updates (a renamed module could keep a stale .pyc). A
+# no-op on fresh extracts.
+find "$SCRIPT_DIR" -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+find "$SCRIPT_DIR" -name '*.pyc' -delete 2>/dev/null || true
 mkdir -p "$SCRIPT_DIR/logs"
+# Logs moved to SQLite (logs/strema.db): remove legacy operational *.log
+# files and their rotations. fleet-audit* is intentionally preserved — it is
+# a separate append-only security audit trail, not diagnostic telemetry.
+for f in "$SCRIPT_DIR"/logs/*.log "$SCRIPT_DIR"/logs/*.log.* \
+         "$SCRIPT_DIR"/logs/*.old "$SCRIPT_DIR"/logs/*.gz; do
+    [ -e "$f" ] || continue
+    case "$(basename "$f")" in
+        fleet-audit*) continue ;;
+    esac
+    rm -f "$f" 2>/dev/null || true
+done
 
 # Ensure the entire project tree is owned by the real user.
 # When install.sh runs via sudo (remote install, curl|bash, deploy.sh), file
@@ -575,18 +617,47 @@ echo "[5/5] Starting services..."
 sudo systemctl enable --now forpost-stream-web
 sudo systemctl enable --now forpost-stream-config.path
 sudo systemctl enable --now forpost-stream-watchdog.timer
+# RTSP server: always-on like the web UI. Its UDP sources are
+# fire-and-forget, so it runs regardless of stream state; with the binary
+# absent (failed download, dev deploy) ConditionPathExists keeps it
+# inactive without crash-looping.
+sudo systemctl enable --now forpost-mediamtx 2>/dev/null || true
+
+# Camera capture: always-on like mediamtx — it owns /dev/videoX and fans
+# raw packets out to the encoder input and the mediamtx raw mounts. It
+# runs even when the mediamtx download failed: the encoder input is the
+# camsrc feed, so the RTSP mounts are the only thing that stays dead.
+# rtsp-server is masked unconditionally (install_mediamtx), so it can
+# no longer hold the camera hostage.
+# Free the camera node from any stale holder (dead service remnants,
+# an orphaned ffmpeg) so forpost-capture can open it cleanly. Every
+# legitimate holder was stopped above or masked (rtsp-server).
+VIDEO_NODE=$(grep -h -oP '^VIDEO_DEVICE=\K\S+' "$SCRIPT_DIR/config/defaults.conf" "$SCRIPT_DIR/config/stream.conf" 2>/dev/null | tr -d '"'"'" | tail -1)
+case "$VIDEO_NODE" in
+    devvideo*) VIDEO_NODE="/dev/video${VIDEO_NODE#devvideo}" ;;
+    /dev/*)    : ;;
+    *)         VIDEO_NODE="" ;;
+esac
+if [ -n "$VIDEO_NODE" ] && [ -e "$VIDEO_NODE" ] && \
+   sudo fuser "$VIDEO_NODE" >/dev/null 2>&1; then
+    echo "⚠️  $VIDEO_NODE still held by a stale process — releasing"
+    sudo fuser -k "$VIDEO_NODE" 2>/dev/null || true
+fi
+sudo systemctl enable --now forpost-capture 2>/dev/null || true
 
 # Enable on boot only (don't start now)
 sudo systemctl enable forpost-power-settings 2>/dev/null || true
 
 # Disable by default (controlled via web UI)
 sudo systemctl disable forpost-stream 2>/dev/null || true
-sudo systemctl disable forpost-udp-proxy 2>/dev/null || true
 sudo systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
 
 # Apply configuration settings (autostart, auto-restart, etc.)
 # Remove snapshot so handle_config_change.sh re-applies all settings from config
 rm -f /tmp/strema_config_snapshot.conf 2>/dev/null || true
+# Drop the cached DZYGA firmware version so the web service re-reads it
+# via the OLED menu after this install (it may have been re-flashed).
+rm -f /tmp/strema_dzyga_fw_version.txt 2>/dev/null || true
 if [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
     echo "Applying configuration settings..."
     # handle_config_change.py runs `systemctl enable/disable`, which needs
@@ -596,7 +667,7 @@ if [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
     if [ -x "$SCRIPT_DIR/scripts/strema" ]; then
         # The strema binary can't derive its install dir from __file__ (it's
         # a bundled Nuitka onefile executable), so it relies on
-        # STREMA_INSTALL_DIR — normally set by patch_systemd_for_binaries.py
+        # STREMA_INSTALL_DIR — normally set by tools/patch_systemd_for_binaries.py
         # in the systemd unit files, but this direct invocation from
         # install.sh needs it set explicitly too, or it silently can't find
         # config/stream.conf and skips applying autostart settings.
@@ -607,12 +678,6 @@ if [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
 fi
 
 # Restart services if they were running before update
-if [ "$UDP_PROXY_WAS_ACTIVE" = "true" ]; then
-    echo "Restarting UDP proxy service..."
-    sudo systemctl start forpost-udp-proxy || true
-fi
-sudo rm -f /tmp/.strema_udp_proxy_was_active 2>/dev/null || true
-
 if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
     echo "Restarting stream service..."
     sudo systemctl start forpost-stream || true
@@ -641,7 +706,7 @@ echo ""
 echo "Useful commands:"
 echo "  sudo systemctl status forpost-stream-web"
 echo "  sudo systemctl status forpost-stream"
-echo "  tail -f $SCRIPT_DIR/logs/stream.log"
+echo "  $SCRIPT_DIR/scripts/strema logs -f   # live stream log (SQLite store)"
 echo ""
 
 # Cleanup debug access after a closed-source install
