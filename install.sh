@@ -198,9 +198,39 @@ if ! sudo -n true 2>/dev/null; then
     exit 1
 fi
 
+# Install system dependencies BEFORE touching services — a package failure
+# here aborts the install while everything is still running, instead of
+# stranding the device half-updated with services stopped.
+echo ""
+echo "[1/5] Installing system dependencies..."
+sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
+sudo apt-get install -y ffmpeg strace python3-flask python3-markdown iproute2 libpython3.11 inotify-tools python3-grpcio python3-protobuf v4l-utils sqlite3
+
+# VPN tooling used by the web UI and fleet discovery. All packages are
+# mandatory — a failure aborts the install (still before services are
+# touched) so a missing dependency is a loud error, not a silent gap.
+# The WireGuard kernel module is in-tree since 5.6, so wireguard-tools (wg,
+# wg-quick) is all we need.
+sudo apt-get install -y wireguard-tools
+# tailscale is only packaged in newer Debian releases; fall back to the
+# official installer (adds their apt repo) on older ones.
+if ! command -v tailscale >/dev/null 2>&1; then
+    sudo apt-get install -y tailscale \
+        || curl -fsSL https://tailscale.com/install.sh | sudo sh
+fi
+sudo systemctl enable --now tailscaled
+
+# Grant strace the CAP_SYS_PTRACE capability so the stream service (running
+# as a non-root user) can attach to the root-owned dzyga process to read
+# frequency via strace. Without this, get_frequency would need sudo on every
+# call (every 2 seconds), flooding the journal with sudo log entries.
+# libcap2-bin provides setcap/getcap; install silently if missing.
+sudo dpkg -s libcap2-bin >/dev/null 2>&1 || sudo apt-get install -y libcap2-bin
+sudo setcap cap_sys_ptrace+ep /usr/bin/strace 2>/dev/null || echo "⚠️  Could not set CAP_SYS_PTRACE on strace (frequency detection may need sudo)"
+
 # Stop and remove all old forpost services FIRST
 echo ""
-echo "[1/5] Stopping and removing old services..."
+echo "[2/5] Stopping and removing old services..."
 STREAM_WAS_ACTIVE=false
 STREAM_STATE=$(sudo systemctl is-active forpost-stream 2>/dev/null || true)
 if [ "$STREAM_STATE" = "active" ] || [ "$STREAM_STATE" = "activating" ] || [ "$STREAM_STATE" = "reloading" ] || [ -f /tmp/.strema_stream_was_active ]; then
@@ -397,34 +427,6 @@ else
 fi
 
 SCRIPT_DIR="$INSTALL_DIR"
-
-# Install dependencies (requires sudo)
-echo ""
-echo "[2/5] Installing system dependencies..."
-sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
-sudo apt-get install -y ffmpeg strace python3-flask python3-markdown iproute2 libpython3.11 inotify-tools python3-grpcio python3-protobuf v4l2-utils sqlite3
-
-# VPN tooling used by the web UI and fleet discovery. Older devices may lack
-# these, so install them here (failures are non-fatal — VPN is optional).
-# The WireGuard kernel module is in-tree since 5.6, so wireguard-tools (wg,
-# wg-quick) is all we need.
-sudo apt-get install -y wireguard-tools 2>/dev/null || echo "⚠️  wireguard-tools install failed"
-# tailscale is only packaged in newer Debian releases; fall back to the
-# official installer (adds their apt repo) on older ones.
-if ! command -v tailscale >/dev/null 2>&1; then
-    sudo apt-get install -y tailscale 2>/dev/null \
-        || curl -fsSL https://tailscale.com/install.sh | sudo sh \
-        || echo "⚠️  Tailscale install failed"
-fi
-sudo systemctl enable --now tailscaled 2>/dev/null || true
-
-# Grant strace the CAP_SYS_PTRACE capability so the stream service (running
-# as a non-root user) can attach to the root-owned dzyga process to read
-# frequency via strace. Without this, get_frequency would need sudo on every
-# call (every 2 seconds), flooding the journal with sudo log entries.
-# libcap2-bin provides setcap/getcap; install silently if missing.
-sudo dpkg -s libcap2-bin >/dev/null 2>&1 || sudo apt-get install -y libcap2-bin 2>/dev/null || true
-sudo setcap cap_sys_ptrace+ep /usr/bin/strace 2>/dev/null || echo "⚠️  Could not set CAP_SYS_PTRACE on strace (frequency detection may need sudo)"
 
 # Prepare project files
 echo ""
