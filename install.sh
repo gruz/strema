@@ -213,10 +213,60 @@ sudo apt-get install -y ffmpeg strace python3-flask python3-markdown iproute2 li
 # wg-quick) is all we need.
 sudo apt-get install -y wireguard-tools
 # tailscale is only packaged in newer Debian releases; fall back to the
-# official installer (adds their apt repo) on older ones.
+# official installer (adds their apt repo) on older ones. pkgs.tailscale.com
+# sits behind CloudFront and answers 403 to some egress IPs/regions — the
+# last resort is our own mirror of the pinned tarball attached to a fixed
+# strema-dist release tag (github.com must work anyway for the strema
+# archive). The tag is pinned: 'latest' moves whenever publish.sh ships new
+# dzyga binaries and would lose this asset.
+TAILSCALE_VERSION=1.104.1
+TAILSCALE_TGZ_SHA256=f60294374967f3dfd8cf57bbbd474d6cfce32d123e3a8ddeab82a87940daa806
+
+install_tailscale_mirror() {
+    local name="tailscale_${TAILSCALE_VERSION}_arm64"
+    local url="https://github.com/gruz/strema-dist/releases/download/v1.0.0/${name}.tgz"
+    local tmp rc
+    echo "📥 tailscale: official sources unreachable, using strema-dist mirror"
+    tmp=$(mktemp -d) || return 1
+    if ! curl -fsSL "$url" -o "$tmp/$name.tgz" \
+            || ! echo "$TAILSCALE_TGZ_SHA256  $tmp/$name.tgz" | sha256sum -c - >/dev/null \
+            || ! tar -xzf "$tmp/$name.tgz" -C "$tmp"; then
+        rm -rf "$tmp"
+        return 1
+    fi
+    # The bundled unit expects ExecStart=/usr/sbin/tailscaled — install to
+    # the exact paths it references, not /usr/local/bin.
+    sudo install -m755 "$tmp/$name/tailscaled" /usr/sbin/tailscaled \
+        && sudo install -m755 "$tmp/$name/tailscale" /usr/bin/tailscale \
+        && sudo install -m644 "$tmp/$name/systemd/tailscaled.service" \
+                /etc/systemd/system/tailscaled.service \
+        && sudo install -m644 "$tmp/$name/systemd/tailscaled.defaults" \
+                /etc/default/tailscaled \
+        && sudo mkdir -p /var/lib/tailscale \
+        && sudo systemctl daemon-reload
+    rc=$?
+    rm -rf "$tmp"
+    return $rc
+}
+
 if ! command -v tailscale >/dev/null 2>&1; then
-    sudo apt-get install -y tailscale \
-        || curl -fsSL https://tailscale.com/install.sh | sudo sh
+    # The official installer's `curl | sh` reports sh's exit status, which
+    # masks a failed download — check `command -v` after each step instead
+    # of trusting the chain.
+    sudo apt-get install -y tailscale || true
+    if ! command -v tailscale >/dev/null 2>&1; then
+        curl -fsSL https://tailscale.com/install.sh | sudo sh || true
+    fi
+    command -v tailscale >/dev/null 2>&1 || install_tailscale_mirror
+elif [ ! -f /etc/apt/sources.list.d/tailscale.list ]; then
+    # Mirror/manual tarball installs have no apt repo, so tailscale would
+    # never update. When pkgs.tailscale.com is reachable again, hand the
+    # install back to the official package: the .deb owns the same
+    # /usr/sbin|/usr/bin paths and the node state lives in
+    # /var/lib/tailscale, so repo-managed updates take over seamlessly
+    # (no re-auth needed). If the site is still blocked, keep the tarball.
+    echo "📥 tailscale installed without apt repo — trying the official installer"
+    curl -fsSL https://tailscale.com/install.sh | sudo sh || true
 fi
 sudo systemctl enable --now tailscaled
 
@@ -438,15 +488,18 @@ chmod +x "$SCRIPT_DIR/web/"web_config.py 2>/dev/null || true
 # MediaMTX (the device's RTSP server) is not part of the release tarball —
 # every install/update already requires internet for the archive itself, so
 # the pinned binary is downloaded here and checksum-verified. Failure is
-# non-fatal: forpost-mediamtx.service has ConditionPathExists and the
-# legacy rtsp-server is masked unconditionally — forpost-capture always
-# owns the camera, so only the RTSP mounts stay dead on a failed download.
+# FATAL: a silent miss leaves forpost-mediamtx dead (ConditionPathExists)
+# while the install reports success — a broken device that looks healthy.
+# Better to abort loudly here and let a rerun fix it once the cause
+# (network, helper crash) is resolved.
 # STREMA_INSTALL_DIR is required when the binary runs outside systemd (see
 # the handle_config_change call below for the rationale).
 if [ -x "$SCRIPT_DIR/scripts/strema" ]; then
-    sudo STREMA_INSTALL_DIR="$SCRIPT_DIR" "$SCRIPT_DIR/scripts/strema" install_mediamtx || true
+    sudo STREMA_INSTALL_DIR="$SCRIPT_DIR" "$SCRIPT_DIR/scripts/strema" install_mediamtx \
+        || { echo "❌ mediamtx install failed — RTSP mounts would stay dead. Fix the cause and rerun install.sh"; exit 1; }
 else
-    sudo python3 "$SCRIPT_DIR/scripts/install_mediamtx.py" || true
+    sudo python3 "$SCRIPT_DIR/scripts/install_mediamtx.py" \
+        || { echo "❌ mediamtx install failed — RTSP mounts would stay dead. Fix the cause and rerun install.sh"; exit 1; }
 fi
 # Remove any leftover source / debug artifacts from closed releases
 rm -rf "$SCRIPT_DIR/.git" 2>/dev/null || true
