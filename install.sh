@@ -678,6 +678,11 @@ sudo systemctl enable --now forpost-stream-watchdog.timer
 # inactive without crash-looping.
 sudo systemctl enable --now forpost-mediamtx 2>/dev/null || true
 
+# Dzyga TCP shim: isolates the dzyga daemon's blocking frame broadcast from
+# slow remote :9999/:9998 consumers. Harmless when no remote clients exist;
+# ConditionPathExists skips it on devices without the dzyga binary.
+sudo systemctl enable --now forpost-dzyga-proxy 2>/dev/null || true
+
 # Camera capture: always-on like mediamtx — it owns /dev/videoX and fans
 # raw packets out to the encoder input and the mediamtx raw mounts. It
 # runs even when the mediamtx download failed: the encoder input is the
