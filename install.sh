@@ -411,14 +411,18 @@ elif [ "$LOCAL_INSTALL" != "true" ]; then
         echo "🌐 Remote installation - fresh install"
     fi
     
-    # Backup config and logs if they exist (safe to call even when missing)
-    if [ -f "$INSTALL_DIR/config/stream.conf" ]; then
-        TMP_BACKUP="/tmp/strema_config_backup_$$"
-        cp "$INSTALL_DIR/config/stream.conf" "$TMP_BACKUP"
-    fi
-    if [ -f "$INSTALL_DIR/config/fleet.conf" ]; then
-        TMP_FLEET_BACKUP="/tmp/strema_fleet_config_backup_$$"
-        cp "$INSTALL_DIR/config/fleet.conf" "$TMP_FLEET_BACKUP"
+    # Backup device-local config/state and logs (the tree is replaced
+    # wholesale below). Keep in sync with RSYNC_SOURCE_EXCLUDES in
+    # tools/deploy.sh: user config, fleet roster, generated capture/mediamtx
+    # state, the operator's descrambler mode.
+    LOCAL_CONFIG_FILES="stream.conf fleet.conf multiview_roster.json capture_backend.state descrambler_mode.state mediamtx.env"
+    TMP_CONFIG_BACKUP=""
+    if [ -d "$INSTALL_DIR/config" ]; then
+        TMP_CONFIG_BACKUP="/tmp/strema_config_backup_$$"
+        mkdir -p "$TMP_CONFIG_BACKUP"
+        for f in $LOCAL_CONFIG_FILES; do
+            [ -f "$INSTALL_DIR/config/$f" ] && cp -p "$INSTALL_DIR/config/$f" "$TMP_CONFIG_BACKUP/"
+        done
     fi
     if [ -d "$INSTALL_DIR/logs" ]; then
         TMP_LOGS_BACKUP="/tmp/strema_logs_backup_$$"
@@ -436,13 +440,10 @@ elif [ "$LOCAL_INSTALL" != "true" ]; then
     mv "$SOURCE_DIR" "$INSTALL_DIR"
     
     # Restore config and logs if backups were created
-    if [ -n "$TMP_BACKUP" ] && [ -f "$TMP_BACKUP" ]; then
-        cp "$TMP_BACKUP" "$INSTALL_DIR/config/stream.conf"
-        rm -f "$TMP_BACKUP"
-    fi
-    if [ -n "$TMP_FLEET_BACKUP" ] && [ -f "$TMP_FLEET_BACKUP" ]; then
-        cp "$TMP_FLEET_BACKUP" "$INSTALL_DIR/config/fleet.conf"
-        rm -f "$TMP_FLEET_BACKUP"
+    if [ -n "$TMP_CONFIG_BACKUP" ] && [ -d "$TMP_CONFIG_BACKUP" ]; then
+        mkdir -p "$INSTALL_DIR/config"
+        cp -a "$TMP_CONFIG_BACKUP/." "$INSTALL_DIR/config/"
+        rm -rf "$TMP_CONFIG_BACKUP"
     fi
     if [ -n "$TMP_LOGS_BACKUP" ] && [ -d "$TMP_LOGS_BACKUP" ]; then
         mkdir -p "$INSTALL_DIR/logs"
