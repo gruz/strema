@@ -414,8 +414,8 @@ elif [ "$LOCAL_INSTALL" != "true" ]; then
     # Backup device-local config/state and logs (the tree is replaced
     # wholesale below). Keep in sync with RSYNC_SOURCE_EXCLUDES in
     # tools/deploy.sh: user config, fleet roster, generated capture/mediamtx
-    # state, the operator's descrambler mode.
-    LOCAL_CONFIG_FILES="stream.conf fleet.conf multiview_roster.json capture_backend.state descrambler_mode.state mediamtx.env"
+    # state, the operator's descrambler mode and monitor statistics.
+    LOCAL_CONFIG_FILES="stream.conf fleet.conf multiview_roster.json capture_backend.state descrambler_mode.state descrambler_stats.json descrambler_stats.clear mediamtx.env"
     TMP_CONFIG_BACKUP=""
     if [ -d "$INSTALL_DIR/config" ]; then
         TMP_CONFIG_BACKUP="/tmp/strema_config_backup_$$"
