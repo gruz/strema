@@ -198,6 +198,26 @@ if ! sudo -n true 2>/dev/null; then
     exit 1
 fi
 
+# Hub role: the same codebase runs as the central proxy on a server
+# (e.g. a Hetzner VM) instead of a field device. Selected by
+# STREMA_ROLE=hub on first install; afterwards the config/hub.enabled
+# marker inside the install tree keeps updates in hub mode. Hub mode
+# forces the service account to 'rpidrone' (the user all forpost-*
+# units reference) and installs into its home, matching the device
+# layout so units/config paths stay identical.
+HUB_MODE=0
+if [ "${STREMA_ROLE:-}" = "hub" ] || [ -f /home/rpidrone/strema/config/hub.enabled ]; then
+    HUB_MODE=1
+fi
+if [ "$HUB_MODE" = "1" ]; then
+    if ! id rpidrone >/dev/null 2>&1; then
+        sudo useradd -m -s /bin/bash rpidrone
+    fi
+    REAL_USER="rpidrone"
+    REAL_HOME=$(eval echo ~rpidrone)
+    echo "🌐 Hub mode: installing the central proxy for user $REAL_USER"
+fi
+
 # Install system dependencies BEFORE touching services — a package failure
 # here aborts the install while everything is still running, instead of
 # stranding the device half-updated with services stopped.
@@ -502,6 +522,34 @@ else
     sudo python3 "$SCRIPT_DIR/scripts/install_mediamtx.py" \
         || { echo "❌ mediamtx install failed — RTSP mounts would stay dead. Fix the cause and rerun install.sh"; exit 1; }
 fi
+
+# Hub mode: swap the device mediamtx config for the publisher hub one
+# and drop the marker that keeps future installs in hub mode. The unit
+# ConditionPathExists on forpost-hub-relay reads the same marker.
+if [ "$HUB_MODE" = "1" ]; then
+    cp "$SCRIPT_DIR/config/mediamtx_hub.yml" "$SCRIPT_DIR/config/mediamtx.yml"
+    touch "$SCRIPT_DIR/config/hub.enabled"
+    chown rpidrone:rpidrone "$SCRIPT_DIR/config/mediamtx.yml" \
+        "$SCRIPT_DIR/config/hub.enabled" 2>/dev/null || true
+
+    # Fleet discovery runs `sudo -n tailscale status` as the service
+    # user. On devices that user has full sudo; on a hub rpidrone is a
+    # plain account, so grant a narrow read-only rule for the status
+    # command only.
+    SUDOERS_TS=$(mktemp)
+    cat > "$SUDOERS_TS" <<EOF
+$REAL_USER ALL=(root) NOPASSWD: /usr/bin/tailscale status, /usr/sbin/tailscale status
+EOF
+    chmod 440 "$SUDOERS_TS"
+    if sudo visudo -cf "$SUDOERS_TS" >/dev/null 2>&1; then
+        sudo install -o root -g root -m 440 "$SUDOERS_TS" \
+            /etc/sudoers.d/strema-tailscale
+        rm -f "$SUDOERS_TS"
+    else
+        rm -f "$SUDOERS_TS"
+        echo "⚠️  strema-tailscale sudoers failed validation — skipping"
+    fi
+fi
 # Remove any leftover source / debug artifacts from closed releases
 rm -rf "$SCRIPT_DIR/.git" 2>/dev/null || true
 # Stale bytecode caches — matters on local/dev installs where the tree is
@@ -669,6 +717,14 @@ sudo systemctl daemon-reload
 echo ""
 echo "[5/5] Starting services..."
 
+if [ "$HUB_MODE" = "1" ]; then
+    # Hub: mediamtx (publisher ingest) + relay (fan-out) + web UI
+    # (multiview/status). No camera, encoder, dzyga or device services —
+    # the hub has no video hardware.
+    sudo systemctl enable --now forpost-stream-web
+    sudo systemctl enable --now forpost-mediamtx 2>/dev/null || true
+    sudo systemctl enable --now forpost-hub-relay 2>/dev/null || true
+else
 # Always start these services
 sudo systemctl enable --now forpost-stream-web
 sudo systemctl enable --now forpost-stream-config.path
@@ -712,6 +768,7 @@ sudo systemctl enable forpost-power-settings 2>/dev/null || true
 # Disable by default (controlled via web UI)
 sudo systemctl disable forpost-stream 2>/dev/null || true
 sudo systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
+fi
 
 # Apply configuration settings (autostart, auto-restart, etc.)
 # Remove snapshot so handle_config_change.sh re-applies all settings from config
@@ -719,7 +776,7 @@ rm -f /tmp/strema_config_snapshot.conf 2>/dev/null || true
 # Drop the cached DZYGA firmware version so the web service re-reads it
 # via the OLED menu after this install (it may have been re-flashed).
 rm -f /tmp/strema_dzyga_fw_version.txt 2>/dev/null || true
-if [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
+if [ "$HUB_MODE" != "1" ] && [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
     echo "Applying configuration settings..."
     # handle_config_change.py runs `systemctl enable/disable`, which needs
     # root. When invoked from systemd (forpost-stream-config.service) it runs
@@ -739,7 +796,7 @@ if [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
 fi
 
 # Restart services if they were running before update
-if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
+if [ "$HUB_MODE" != "1" ] && [ "$STREAM_WAS_ACTIVE" = "true" ]; then
     echo "Restarting stream service..."
     sudo systemctl start forpost-stream || true
     # Give the service a moment to become active; if it failed, the web UI can be used to start it
