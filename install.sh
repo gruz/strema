@@ -231,17 +231,10 @@ fi
 echo ""
 echo "[1/5] Installing system dependencies..."
 sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
-# libpython3.11 is the shared runtime of the Nuitka onefile binary.
-# Newer tarballs bundle it (scripts/assets/libpython3.11.so.1.0 — see
-# "Files ready" below), but older ones rely on the distro package, so
-# install it where the distro offers it. Skipped entirely for
-# source/local installs (system python3 runs the code) and on distros
-# without the package (e.g. Ubuntu 26.04 ships only libpython3.14).
+# The release binary is a Nuitka --standalone build: it carries its own
+# Python runtime inside scripts/strema.dist/, so no libpython package is
+# needed regardless of the distro's Python version.
 DEPS="ffmpeg strace python3-flask python3-markdown iproute2 inotify-tools python3-grpcio python3-protobuf v4l-utils sqlite3"
-if [ "$LOCAL_INSTALL" != "true" ] \
-        && apt-cache policy libpython3.11 2>/dev/null | grep -qE 'Candidate: +[0-9]'; then
-    DEPS="$DEPS libpython3.11"
-fi
 sudo apt-get install -y $DEPS
 
 # VPN tooling used by the web UI and fleet discovery. All packages are
@@ -617,17 +610,6 @@ sudo rm -f /tmp/dzyga_freq.txt /tmp/dzyga_scanning_state.txt \
 
 echo "✅ Files ready"
 
-# Newer release tarballs bundle the Nuitka binary's Python runtime at
-# scripts/assets/libpython3.11.so.1.0 — place it on the linker path
-# (the binary's RPATH already points at /usr/local/lib). Absent in
-# older tarballs and in source/local installs, where the distro package
-# or system python3 covers the runtime instead.
-if [ -f "$SCRIPT_DIR/scripts/assets/libpython3.11.so.1.0" ]; then
-    sudo install -m755 "$SCRIPT_DIR/scripts/assets/libpython3.11.so.1.0" \
-        /usr/local/lib/libpython3.11.so.1.0
-    sudo ldconfig
-fi
-
 # Fleet operator account 'stremaadm': SSH login restricted to `strema
 # fleet-admin` commands, executed as $REAL_USER through a sudoers whitelist.
 # The account itself has no sudo rights and no access to the service user's
@@ -820,7 +802,7 @@ if [ "$HUB_MODE" != "1" ] && [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
     # user, so elevate explicitly.
     if [ -x "$SCRIPT_DIR/scripts/strema" ]; then
         # The strema binary can't derive its install dir from __file__ (it's
-        # a bundled Nuitka onefile executable), so it relies on
+        # a bundled Nuitka standalone executable), so it relies on
         # STREMA_INSTALL_DIR — normally set by tools/patch_systemd_for_binaries.py
         # in the systemd unit files, but this direct invocation from
         # install.sh needs it set explicitly too, or it silently can't find
