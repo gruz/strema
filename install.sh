@@ -117,6 +117,13 @@ get_latest_release() {
     LATEST_TAG="$TAG"
 }
 
+# Release archives are built per-arch (see release.yml): arm64 keeps the
+# historical unsuffixed name, x86_64 assets carry an -amd64 suffix.
+case "$(uname -m)" in
+    x86_64|amd64) ASSET_SUFFIX="-amd64" ;;
+    *)            ASSET_SUFFIX="" ;;
+esac
+
 # Download and extract the strema archive into the current directory.
 # Sets SOURCE_DIR variable. Exits on failure.
 download_strema() {
@@ -134,7 +141,7 @@ download_strema() {
             exit 1
         fi
         echo "Downloading latest release $LATEST_TAG..."
-        local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_TAG/strema-$LATEST_TAG.tar.gz"
+        local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_TAG/strema-$LATEST_TAG$ASSET_SUFFIX.tar.gz"
         curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
             echo "❌ Download failed"
             rm -rf "$TMP_DIR"
@@ -156,7 +163,7 @@ download_strema() {
         SOURCE_DIR="$RELEASE_DIR_NAME"
     else
         echo "Downloading release $VERSION..."
-        local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION.tar.gz"
+        local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION$ASSET_SUFFIX.tar.gz"
         curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
             echo "❌ Download failed. Check if release $VERSION exists"
             rm -rf "$TMP_DIR"
@@ -224,7 +231,18 @@ fi
 echo ""
 echo "[1/5] Installing system dependencies..."
 sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
-sudo apt-get install -y ffmpeg strace python3-flask python3-markdown iproute2 libpython3.11 inotify-tools python3-grpcio python3-protobuf v4l-utils sqlite3
+# libpython3.11 is the shared runtime of the Nuitka onefile binary.
+# Newer tarballs bundle it (scripts/assets/libpython3.11.so.1.0 — see
+# "Files ready" below), but older ones rely on the distro package, so
+# install it where the distro offers it. Skipped entirely for
+# source/local installs (system python3 runs the code) and on distros
+# without the package (e.g. Ubuntu 26.04 ships only libpython3.14).
+DEPS="ffmpeg strace python3-flask python3-markdown iproute2 inotify-tools python3-grpcio python3-protobuf v4l-utils sqlite3"
+if [ "$LOCAL_INSTALL" != "true" ] \
+        && apt-cache policy libpython3.11 2>/dev/null | grep -qE 'Candidate: +[0-9]'; then
+    DEPS="$DEPS libpython3.11"
+fi
+sudo apt-get install -y $DEPS
 
 # VPN tooling used by the web UI and fleet discovery. All packages are
 # mandatory — a failure aborts the install (still before services are
@@ -243,6 +261,13 @@ TAILSCALE_VERSION=1.104.1
 TAILSCALE_TGZ_SHA256=f60294374967f3dfd8cf57bbbd474d6cfce32d123e3a8ddeab82a87940daa806
 
 install_tailscale_mirror() {
+    # The strema-dist mirror asset is arm64-only — on other arches it
+    # would install an arm64 tailscaled that can never run.
+    case "$(uname -m)" in
+        aarch64|arm64) ;;
+        *) echo "📥 tailscale: strema-dist mirror has no $(uname -m) build — skipping"
+           return 1 ;;
+    esac
     local name="tailscale_${TAILSCALE_VERSION}_arm64"
     local url="https://github.com/gruz/strema-dist/releases/download/v1.0.0/${name}.tgz"
     local tmp rc
@@ -591,6 +616,17 @@ sudo rm -f /tmp/dzyga_freq.txt /tmp/dzyga_scanning_state.txt \
           /tmp/dzyga.md5 /tmp/forpost_config_snapshot.conf 2>/dev/null || true
 
 echo "✅ Files ready"
+
+# Newer release tarballs bundle the Nuitka binary's Python runtime at
+# scripts/assets/libpython3.11.so.1.0 — place it on the linker path
+# (the binary's RPATH already points at /usr/local/lib). Absent in
+# older tarballs and in source/local installs, where the distro package
+# or system python3 covers the runtime instead.
+if [ -f "$SCRIPT_DIR/scripts/assets/libpython3.11.so.1.0" ]; then
+    sudo install -m755 "$SCRIPT_DIR/scripts/assets/libpython3.11.so.1.0" \
+        /usr/local/lib/libpython3.11.so.1.0
+    sudo ldconfig
+fi
 
 # Fleet operator account 'stremaadm': SSH login restricted to `strema
 # fleet-admin` commands, executed as $REAL_USER through a sudoers whitelist.
