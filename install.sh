@@ -127,6 +127,7 @@ esac
 # Download and extract the strema archive into the current directory.
 # Sets SOURCE_DIR variable. Exits on failure.
 download_strema() {
+    local tag="$VERSION"
     if [ "$VERSION" = "latest" ]; then
         get_latest_release
         if [ -n "$RATE_LIMITED" ]; then
@@ -140,15 +141,7 @@ download_strema() {
             rm -rf "$TMP_DIR"
             exit 1
         fi
-        echo "Downloading latest release $LATEST_TAG..."
-        local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_TAG/strema-$LATEST_TAG$ASSET_SUFFIX.tar.gz"
-        curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
-            echo "❌ Download failed"
-            rm -rf "$TMP_DIR"
-            exit 1
-        }
-        tar -xzf strema.tar.gz
-        SOURCE_DIR="$RELEASE_DIR_NAME"
+        tag="$LATEST_TAG"
     elif [ "$VERSION" = "master" ]; then
         echo "❌ 'master' is not available for remote installation from $GITHUB_REPO."
         echo "   The release repo only contains release archives, not source code."
@@ -161,27 +154,39 @@ download_strema() {
         cp "$VERSION" strema.tar.gz
         tar -xzf strema.tar.gz
         SOURCE_DIR="$RELEASE_DIR_NAME"
-    else
-        echo "Downloading release $VERSION..."
-        local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$VERSION/strema-$VERSION$ASSET_SUFFIX.tar.gz"
-        curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
-            echo "❌ Download failed. Check if release $VERSION exists"
-            rm -rf "$TMP_DIR"
-            exit 1
-        }
-        tar -xzf strema.tar.gz
-        SOURCE_DIR="$RELEASE_DIR_NAME"
+        # Normalize VERSION to the release version carried inside the
+        # archive — otherwise the VERSION file written below ends up
+        # holding the local path that was passed on the command line.
+        if [ -f "$SOURCE_DIR/VERSION" ]; then
+            VERSION=$(tr -d '[:space:]' < "$SOURCE_DIR/VERSION")
+        fi
+        return
     fi
+    echo "Downloading release $tag..."
+    local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$tag/strema-$tag$ASSET_SUFFIX.tar.gz"
+    curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
+        echo "❌ Download failed. Check if release $tag exists"
+        rm -rf "$TMP_DIR"
+        exit 1
+    }
+    tar -xzf strema.tar.gz
+    SOURCE_DIR="$RELEASE_DIR_NAME"
 }
 
 VERSION="${1:-latest}"
-[ -z "$VERSION" ] && VERSION="latest"
+
+# A local archive argument may be relative — resolve it to an absolute
+# path now, before any cd into temp dirs, so the -f checks in the
+# git-mode guard and in download_strema see the same file. "local" is
+# a mode keyword, not a path — never absolutize it.
+if [ "$VERSION" != "local" ] && [ -f "$VERSION" ]; then
+    VERSION="$(cd "$(dirname "$VERSION")" && pwd)/$(basename "$VERSION")"
+fi
 
 # Local install mode: use the source tree already present (e.g. pushed by deploy.sh dev/test)
 LOCAL_INSTALL=false
 if [ "$VERSION" = "local" ]; then
     LOCAL_INSTALL=true
-    VERSION="local"
 fi
 
 echo "=========================================="
@@ -287,6 +292,25 @@ install_tailscale_mirror() {
     return $rc
 }
 
+# Validate a sudoers fragment (read from stdin) and install it into
+# /etc/sudoers.d/<name>. Skips with a warning when validation fails.
+install_sudoers() {
+    local name="$1" tmp
+    tmp=$(mktemp)
+    cat > "$tmp"
+    chmod 440 "$tmp"
+    if sudo visudo -cf "$tmp" >/dev/null 2>&1; then
+        # install(1) sets root ownership — sudo ignores sudoers.d files
+        # not owned by root.
+        sudo install -o root -g root -m 440 "$tmp" "/etc/sudoers.d/$name"
+        rm -f "$tmp"
+        return 0
+    fi
+    rm -f "$tmp"
+    echo "⚠️  $name sudoers failed validation — skipping"
+    return 1
+}
+
 if ! command -v tailscale >/dev/null 2>&1; then
     # The official installer's `curl | sh` reports sh's exit status, which
     # masks a failed download — check `command -v` after each step instead
@@ -337,7 +361,8 @@ sudo rm -f /tmp/.strema_stream_was_active /tmp/.strema_udp_proxy_was_active 2>/d
 # Stop all services except web interface (to allow online updates to complete)
 for service in forpost-stream forpost-udp-proxy forpost-stream-autorestart.timer \
                forpost-stream-config.path forpost-stream-watchdog.timer \
-               forpost-power-settings forpost-mediamtx forpost-capture; do
+               forpost-power-settings forpost-mediamtx forpost-capture \
+               forpost-hub-relay forpost-hub-webfw forpost-dzyga-proxy; do
     sudo systemctl stop "$service" 2>/dev/null || true
     sudo systemctl disable "$service" 2>/dev/null || true
 done
@@ -383,28 +408,29 @@ fi
 
 OLD_INSTALL_DIR="$REAL_HOME/FORPOST/strema"
 NEW_INSTALL_DIR="$REAL_HOME/strema"
+INSTALL_DIR="$NEW_INSTALL_DIR"
 
 # Check for migration
-if [ -d "$OLD_INSTALL_DIR" ] && [ ! -d "$NEW_INSTALL_DIR" ]; then
-    echo ""
-    echo "⚠️  Found old installation at: $OLD_INSTALL_DIR"
-    echo "   Migrating to new location: $NEW_INSTALL_DIR"
-    mv "$OLD_INSTALL_DIR" "$NEW_INSTALL_DIR"
-    echo "✅ Migration complete"
-    echo "   Note: Old directory $REAL_HOME/FORPOST still exists (may contain other files)"
-    INSTALL_DIR="$NEW_INSTALL_DIR"
-elif [ -d "$OLD_INSTALL_DIR" ] && [ -d "$NEW_INSTALL_DIR" ]; then
-    echo "⚠️  Found installations in both locations:"
-    echo "   Old: $OLD_INSTALL_DIR"
-    echo "   New: $NEW_INSTALL_DIR"
-    echo "   Using new location. You can manually remove old one."
-    INSTALL_DIR="$NEW_INSTALL_DIR"
-else
-    INSTALL_DIR="$NEW_INSTALL_DIR"
+if [ -d "$OLD_INSTALL_DIR" ]; then
+    if [ ! -d "$NEW_INSTALL_DIR" ]; then
+        echo ""
+        echo "⚠️  Found old installation at: $OLD_INSTALL_DIR"
+        echo "   Migrating to new location: $NEW_INSTALL_DIR"
+        mv "$OLD_INSTALL_DIR" "$NEW_INSTALL_DIR"
+        echo "✅ Migration complete"
+        echo "   Note: Old directory $REAL_HOME/FORPOST still exists (may contain other files)"
+    else
+        echo "⚠️  Found installations in both locations:"
+        echo "   Old: $OLD_INSTALL_DIR"
+        echo "   New: $NEW_INSTALL_DIR"
+        echo "   Using new location. You can manually remove old one."
+    fi
 fi
 
-# Check installation type and update files
-if [ -d "$SCRIPT_DIR/.git" ] && [ "$LOCAL_INSTALL" != "true" ]; then
+# Check installation type and update files. A local archive argument
+# (-f file) always wins over git mode: the user explicitly asked for
+# that tarball, so the tree must be replaced rather than git-reset.
+if [ -d "$SCRIPT_DIR/.git" ] && [ "$LOCAL_INSTALL" != "true" ] && [ ! -f "$VERSION" ]; then
     # Git installation
     echo ""
     echo "📁 Git installation detected"
@@ -453,7 +479,7 @@ elif [ "$LOCAL_INSTALL" != "true" ]; then
     # wholesale below). Keep in sync with RSYNC_SOURCE_EXCLUDES in
     # tools/deploy.sh: user config, fleet roster, generated capture/mediamtx
     # state, the operator's descrambler mode and monitor statistics.
-    LOCAL_CONFIG_FILES="stream.conf fleet.conf multiview_roster.json capture_backend.state descrambler_mode.state descrambler_stats.json descrambler_stats.clear mediamtx.env"
+    LOCAL_CONFIG_FILES="stream.conf fleet.conf multiview_roster.json capture_backend.state descrambler_mode.state descrambler_stats.json descrambler_stats.clear mediamtx.env hub_registry.json"
     TMP_CONFIG_BACKUP=""
     if [ -d "$INSTALL_DIR/config" ]; then
         TMP_CONFIG_BACKUP="/tmp/strema_config_backup_$$"
@@ -520,9 +546,8 @@ SCRIPT_DIR="$INSTALL_DIR"
 # Prepare project files
 echo ""
 echo "[3/5] Preparing project files..."
-chmod +x "$SCRIPT_DIR/scripts/"*.sh 2>/dev/null || true
-chmod +x "$SCRIPT_DIR/scripts/"*.py 2>/dev/null || true
-chmod +x "$SCRIPT_DIR/web/"web_config.py 2>/dev/null || true
+chmod +x "$SCRIPT_DIR/scripts/"*.sh "$SCRIPT_DIR/scripts/"*.py \
+    "$SCRIPT_DIR/web/"web_config.py 2>/dev/null || true
 
 # MediaMTX (the device's RTSP server) is not part of the release tarball —
 # every install/update already requires internet for the archive itself, so
@@ -554,18 +579,27 @@ if [ "$HUB_MODE" = "1" ]; then
     # user. On devices that user has full sudo; on a hub rpidrone is a
     # plain account, so grant a narrow read-only rule for the status
     # command only.
-    SUDOERS_TS=$(mktemp)
-    cat > "$SUDOERS_TS" <<EOF
+    install_sudoers strema-tailscale <<EOF
 $REAL_USER ALL=(root) NOPASSWD: /usr/bin/tailscale status, /usr/sbin/tailscale status
 EOF
-    chmod 440 "$SUDOERS_TS"
-    if sudo visudo -cf "$SUDOERS_TS" >/dev/null 2>&1; then
-        sudo install -o root -g root -m 440 "$SUDOERS_TS" \
-            /etc/sudoers.d/strema-tailscale
-        rm -f "$SUDOERS_TS"
-    else
-        rm -f "$SUDOERS_TS"
-        echo "⚠️  strema-tailscale sudoers failed validation — skipping"
+
+    # Hub self-update via web: the service user has no general sudo on a
+    # hub, so /api/updates/install cannot run install.sh directly like on
+    # devices. Install a root-owned helper plus a narrow sudoers rule —
+    # the helper validates the version argument and runs the official
+    # install.sh pipeline as root (hub mode is kept via hub.enabled).
+    HUB_UPDATE_BIN=/usr/local/bin/strema-hub-update
+    if [ -f "$SCRIPT_DIR/scripts/hub_self_update.sh" ]; then
+        # Stamp the real install dir into the helper — it is not always
+        # /home/rpidrone/strema (dev/source installs may differ).
+        HUB_UPD_SRC=$(mktemp)
+        sed "s|^INSTALL_DIR=.*|INSTALL_DIR=$SCRIPT_DIR|" \
+            "$SCRIPT_DIR/scripts/hub_self_update.sh" > "$HUB_UPD_SRC"
+        sudo install -o root -g root -m 755 "$HUB_UPD_SRC" "$HUB_UPDATE_BIN"
+        rm -f "$HUB_UPD_SRC"
+        install_sudoers strema-update <<EOF
+$REAL_USER ALL=(root) NOPASSWD: $HUB_UPDATE_BIN *
+EOF
     fi
 fi
 # Remove any leftover source / debug artifacts from closed releases
@@ -628,22 +662,13 @@ if [ -f "$SCRIPT_DIR/scripts/stremaadm_shell.sh" ]; then
         sudo usermod -s "$STREMAADM_SHELL" stremaadm || true
     fi
     echo 'stremaadm:forpost' | sudo chpasswd || true
-    SUDOERS_TMP=$(mktemp)
     # Single whitelisted entry point — it dispatches to the strema binary or
     # strema.py itself, so the rule works for both release and source trees.
-    cat > "$SUDOERS_TMP" <<EOF
+    if install_sudoers strema-fleet <<EOF
 stremaadm ALL=($REAL_USER) NOPASSWD: $SCRIPT_DIR/scripts/fleet_admin_entry.sh, $SCRIPT_DIR/scripts/fleet_admin_entry.sh *
 EOF
-    chmod 440 "$SUDOERS_TMP"
-    if sudo visudo -cf "$SUDOERS_TMP" >/dev/null 2>&1; then
-        # install(1) sets root ownership — sudo ignores sudoers.d files
-        # not owned by root.
-        sudo install -o root -g root -m 440 "$SUDOERS_TMP" /etc/sudoers.d/strema-fleet
-        rm -f "$SUDOERS_TMP"
+    then
         echo "✅ stremaadm fleet-admin account ready (login: stremaadm)"
-    else
-        rm -f "$SUDOERS_TMP"
-        echo "⚠️  strema-fleet sudoers failed validation — skipping"
     fi
 fi
 
@@ -735,57 +760,60 @@ sudo systemctl daemon-reload
 echo ""
 echo "[5/5] Starting services..."
 
-if [ "$HUB_MODE" = "1" ]; then
-    # Hub: mediamtx (publisher ingest) + relay (fan-out) + web UI
-    # (multiview/status). No camera, encoder, dzyga or device services —
-    # the hub has no video hardware.
-    sudo systemctl enable --now forpost-stream-web
-    sudo systemctl enable --now forpost-mediamtx 2>/dev/null || true
-    sudo systemctl enable --now forpost-hub-relay 2>/dev/null || true
-else
-# Always start these services
+# Always-on services, common to hub and device modes.
 sudo systemctl enable --now forpost-stream-web
-sudo systemctl enable --now forpost-stream-config.path
-sudo systemctl enable --now forpost-stream-watchdog.timer
 # RTSP server: always-on like the web UI. Its UDP sources are
 # fire-and-forget, so it runs regardless of stream state; with the binary
 # absent (failed download, dev deploy) ConditionPathExists keeps it
-# inactive without crash-looping.
+# inactive without crash-looping. On the hub it is the publisher ingest.
 sudo systemctl enable --now forpost-mediamtx 2>/dev/null || true
 
-# Dzyga TCP shim: isolates the dzyga daemon's blocking frame broadcast from
-# slow remote :9999/:9998 consumers. Harmless when no remote clients exist;
-# ConditionPathExists skips it on devices without the dzyga binary.
-sudo systemctl enable --now forpost-dzyga-proxy 2>/dev/null || true
+if [ "$HUB_MODE" = "1" ]; then
+    # Hub: relay fan-out on top of mediamtx ingest + web UI
+    # (multiview/status). No camera, encoder, dzyga or device services —
+    # the hub has no video hardware.
+    sudo systemctl enable --now forpost-hub-relay 2>/dev/null || true
+    # Kernel-level :8081 lockdown — the web API is unauthenticated by
+    # the LAN-trust design, so on a public-IP hub it must not answer
+    # the WAN at all (defense in depth with the Flask guard).
+    sudo systemctl enable --now forpost-hub-webfw 2>/dev/null || true
+else
+    sudo systemctl enable --now forpost-stream-config.path
+    sudo systemctl enable --now forpost-stream-watchdog.timer
 
-# Camera capture: always-on like mediamtx — it owns /dev/videoX and fans
-# raw packets out to the encoder input and the mediamtx raw mounts. It
-# runs even when the mediamtx download failed: the encoder input is the
-# camsrc feed, so the RTSP mounts are the only thing that stays dead.
-# rtsp-server is masked unconditionally (install_mediamtx), so it can
-# no longer hold the camera hostage.
-# Free the camera node from any stale holder (dead service remnants,
-# an orphaned ffmpeg) so forpost-capture can open it cleanly. Every
-# legitimate holder was stopped above or masked (rtsp-server).
-VIDEO_NODE=$(grep -h -oP '^VIDEO_DEVICE=\K\S+' "$SCRIPT_DIR/config/defaults.conf" "$SCRIPT_DIR/config/stream.conf" 2>/dev/null | tr -d '"'"'" | tail -1)
-case "$VIDEO_NODE" in
-    devvideo*) VIDEO_NODE="/dev/video${VIDEO_NODE#devvideo}" ;;
-    /dev/*)    : ;;
-    *)         VIDEO_NODE="" ;;
-esac
-if [ -n "$VIDEO_NODE" ] && [ -e "$VIDEO_NODE" ] && \
-   sudo fuser "$VIDEO_NODE" >/dev/null 2>&1; then
-    echo "⚠️  $VIDEO_NODE still held by a stale process — releasing"
-    sudo fuser -k "$VIDEO_NODE" 2>/dev/null || true
-fi
-sudo systemctl enable --now forpost-capture 2>/dev/null || true
+    # Dzyga TCP shim: isolates the dzyga daemon's blocking frame broadcast from
+    # slow remote :9999/:9998 consumers. Harmless when no remote clients exist;
+    # ConditionPathExists skips it on devices without the dzyga binary.
+    sudo systemctl enable --now forpost-dzyga-proxy 2>/dev/null || true
 
-# Enable on boot only (don't start now)
-sudo systemctl enable forpost-power-settings 2>/dev/null || true
+    # Camera capture: always-on like mediamtx — it owns /dev/videoX and fans
+    # raw packets out to the encoder input and the mediamtx raw mounts. It
+    # runs even when the mediamtx download failed: the encoder input is the
+    # camsrc feed, so the RTSP mounts are the only thing that stays dead.
+    # rtsp-server is masked unconditionally (install_mediamtx), so it can
+    # no longer hold the camera hostage.
+    # Free the camera node from any stale holder (dead service remnants,
+    # an orphaned ffmpeg) so forpost-capture can open it cleanly. Every
+    # legitimate holder was stopped above or masked (rtsp-server).
+    VIDEO_NODE=$(grep -h -oP '^VIDEO_DEVICE=\K\S+' "$SCRIPT_DIR/config/defaults.conf" "$SCRIPT_DIR/config/stream.conf" 2>/dev/null | tr -d '"'"'" | tail -1)
+    case "$VIDEO_NODE" in
+        devvideo*) VIDEO_NODE="/dev/video${VIDEO_NODE#devvideo}" ;;
+        /dev/*)    : ;;
+        *)         VIDEO_NODE="" ;;
+    esac
+    if [ -n "$VIDEO_NODE" ] && [ -e "$VIDEO_NODE" ] && \
+       sudo fuser "$VIDEO_NODE" >/dev/null 2>&1; then
+        echo "⚠️  $VIDEO_NODE still held by a stale process — releasing"
+        sudo fuser -k "$VIDEO_NODE" 2>/dev/null || true
+    fi
+    sudo systemctl enable --now forpost-capture 2>/dev/null || true
 
-# Disable by default (controlled via web UI)
-sudo systemctl disable forpost-stream 2>/dev/null || true
-sudo systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
+    # Enable on boot only (don't start now)
+    sudo systemctl enable forpost-power-settings 2>/dev/null || true
+
+    # Disable by default (controlled via web UI)
+    sudo systemctl disable forpost-stream 2>/dev/null || true
+    sudo systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
 fi
 
 # Apply configuration settings (autostart, auto-restart, etc.)
