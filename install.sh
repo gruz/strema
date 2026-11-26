@@ -529,8 +529,12 @@ if [ "$TARBALL_MODE" = "true" ]; then
             # noise. "Only in" lines are normalized to repo-relative paths.
             # The final grep -vE drops runtime-generated artifacts that a
             # live tree always has but a fresh tarball never ships:
-            # code_core.txt (diagnostic dump, gitignored) and the
-            # install-time mediamtx download under scripts/assets/.
+            # code_core.txt (diagnostic dump, gitignored), the install-time
+            # mediamtx download under scripts/assets/, the .cache update-check
+            # store, and — on hubs — config/mediamtx.yml, which the hub block
+            # rewrites from mediamtx_hub.yml on every install (on devices it
+            # is always identical to the tarball anyway, so excluding it is
+            # a no-op there). cache/ and .pytest_cache/ are dev leftovers.
             DIFF_PATHS=$(diff -qr \
                 --exclude=strema.dist --exclude=logs --exclude=.git \
                 --exclude=__pycache__ --exclude='*.pyc' \
@@ -547,7 +551,7 @@ if [ "$TARBALL_MODE" = "true" ]; then
                       -e "s|^Only in $INSTALL_DIR: ||" \
                       -e "s|^Only in $SOURCE_DIR: ||" \
                 | grep -v '^$' \
-                | grep -vE '(^|/)code_core\.txt$|^scripts/assets/mediamtx' || true)
+                | grep -vE '(^|/)code_core\.txt$|^scripts/assets/mediamtx|^config/mediamtx\.yml$|^\.cache|^\.pytest_cache|^cache$' || true)
             RESTART_SCOPE="light"
             while IFS= read -r rel; do
                 [ -z "$rel" ] && continue
