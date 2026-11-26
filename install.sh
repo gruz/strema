@@ -132,13 +132,11 @@ download_strema() {
         get_latest_release
         if [ -n "$RATE_LIMITED" ]; then
             echo "$RATE_LIMIT_MSG"
-            rm -rf "$TMP_DIR"
             exit 1
         fi
         if [ -z "$LATEST_TAG" ]; then
             echo "❌ No releases found in $GITHUB_REPO."
             echo "   This is unexpected — please report this issue."
-            rm -rf "$TMP_DIR"
             exit 1
         fi
         tag="$LATEST_TAG"
@@ -146,7 +144,6 @@ download_strema() {
         echo "❌ 'master' is not available for remote installation from $GITHUB_REPO."
         echo "   The release repo only contains release archives, not source code."
         echo "   Use 'latest' or a specific version (e.g. v0.0.1-beta.05)."
-        rm -rf "$TMP_DIR"
         exit 1
     elif [ -f "$VERSION" ]; then
         # Install from a local archive (e.g. built via build_binaries.sh / build_in_docker.sh)
@@ -164,9 +161,11 @@ download_strema() {
     fi
     echo "Downloading release $tag..."
     local ARCHIVE_URL="https://github.com/$GITHUB_REPO/releases/download/$tag/strema-$tag$ASSET_SUFFIX.tar.gz"
-    curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
+    # -C - resumes an interrupted download; some mirrors reject ranges, so
+    # fall back to a plain fetch before declaring failure.
+    curl -fsSL -C - -o strema.tar.gz "$ARCHIVE_URL" \
+        || curl -fsSL -o strema.tar.gz "$ARCHIVE_URL" || {
         echo "❌ Download failed. Check if release $tag exists"
-        rm -rf "$TMP_DIR"
         exit 1
     }
     tar -xzf strema.tar.gz
@@ -187,6 +186,19 @@ fi
 LOCAL_INSTALL=false
 if [ "$VERSION" = "local" ]; then
     LOCAL_INSTALL=true
+fi
+
+# Git mode: the script lives inside a source checkout (.git present) and no
+# local archive was requested — update via git instead of a release tarball.
+GIT_MODE=false
+if [ -d "$SCRIPT_DIR/.git" ] && [ "$LOCAL_INSTALL" != "true" ] && [ ! -f "$VERSION" ]; then
+    GIT_MODE=true
+fi
+
+# Tarball mode: download/extract a release archive (fresh install or update).
+TARBALL_MODE=false
+if [ "$LOCAL_INSTALL" != "true" ] && [ "$GIT_MODE" = "false" ]; then
+    TARBALL_MODE=true
 fi
 
 echo "=========================================="
@@ -230,24 +242,111 @@ if [ "$HUB_MODE" = "1" ]; then
     echo "🌐 Hub mode: installing the central proxy for user $REAL_USER"
 fi
 
-# Install system dependencies BEFORE touching services — a package failure
-# here aborts the install while everything is still running, instead of
-# stranding the device half-updated with services stopped.
+OLD_INSTALL_DIR="$REAL_HOME/FORPOST/strema"
+NEW_INSTALL_DIR="$REAL_HOME/strema"
+INSTALL_DIR="$NEW_INSTALL_DIR"
+
+# Device-local config/state and logs that survive a tarball update: the
+# tree is swapped wholesale, so these are moved (renamed) from the old
+# tree into the new one — keep in sync with RSYNC_SOURCE_EXCLUDES in
+# tools/deploy.sh. stream.conf.backup.* is intentionally NOT preserved.
+LOCAL_CONFIG_FILES="stream.conf fleet.conf multiview_roster.json capture_backend.state descrambler_mode.state descrambler_stats.json descrambler_stats.clear mediamtx.env hub_registry.json"
+
+# Move preserved config files and the whole logs dir from the old tree to
+# the new one. Rename (mv) is used instead of copy so multi-hundred-MB
+# log stores do not get duplicated on the SD card. hub.enabled is
+# recreated by the hub-mode block after the swap.
+link_local_state() {
+    local old_dir="$1" new_dir="$2" f
+    for f in $LOCAL_CONFIG_FILES; do
+        if [ -f "$old_dir/config/$f" ]; then
+            mkdir -p "$new_dir/config"
+            mv -f "$old_dir/config/$f" "$new_dir/config/$f"
+        fi
+    done
+    if [ -d "$old_dir/logs" ]; then
+        rm -rf "$new_dir/logs"
+        mv "$old_dir/logs" "$new_dir/logs"
+    fi
+}
+
+# Install systemd units from a tree's systemd/ dir, rewriting
+# __INSTALL_DIR__ and skipping files whose rendered content is unchanged.
+# Args: $1 = tree dir, $2 = "force" to install unconditionally.
+install_units() {
+    local tree="$1" force="${2:-}"
+    local file name tmp changed=0
+    for file in "$tree/systemd"/*; do
+        [ -f "$file" ] || continue
+        name=$(basename "$file")
+        if grep -q "__INSTALL_DIR__" "$file"; then
+            tmp="/tmp/$name.install-$$"
+            sudo sed "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$file" > "$tmp"
+        else
+            tmp="$file"
+        fi
+        if [ "$force" = "force" ] || ! sudo cmp -s "$tmp" "/etc/systemd/system/$name" 2>/dev/null; then
+            if [ "$tmp" != "$file" ]; then
+                sudo mv "$tmp" "/etc/systemd/system/$name"
+            else
+                sudo cp "$file" "/etc/systemd/system/$name"
+            fi
+            changed=1
+        elif [ "$tmp" != "$file" ]; then
+            rm -f "$tmp"
+        fi
+    done
+    [ "$changed" = "1" ] && sudo systemctl daemon-reload
+    return 0
+}
+
+# Remove /etc forpost-* unit files that are no longer shipped by the tree
+# (renamed/removed units, stale drop-ins handled separately below).
+remove_stale_units() {
+    local service_file name
+    for service_file in /etc/systemd/system/forpost-*.service \
+                       /etc/systemd/system/forpost-*.timer \
+                       /etc/systemd/system/forpost-*.path; do
+        [ -f "$service_file" ] || [ -L "$service_file" ] || continue
+        name=$(basename "$service_file")
+        [ -f "$INSTALL_DIR/systemd/$name" ] && continue
+        sudo rm -f "$service_file"
+    done
+    return 0
+}
+
+# ==========================================================================
+# Phase 1 — prepare everything that can fail or take time while all
+# services keep running: packages, the new tree (download/extract/verify),
+# mediamtx and dzyga vendor binaries. Only after this succeeds do we touch
+# running services, so a network failure aborts the update harmlessly.
+# ==========================================================================
 echo ""
-echo "[1/5] Installing system dependencies..."
-sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
+echo "[1/6] Installing system dependencies..."
+
 # The release binary is a Nuitka --standalone build: it carries its own
 # Python runtime inside scripts/strema.dist/, so no libpython package is
 # needed regardless of the distro's Python version.
-DEPS="ffmpeg strace python3-flask python3-markdown iproute2 inotify-tools python3-grpcio python3-protobuf v4l-utils sqlite3"
-sudo apt-get install -y $DEPS
+# Probe first: apt-get update + install only runs when something is
+# actually missing — on repeat updates this saves a slow package-index
+# refresh on field links.
+DEPS="ffmpeg strace python3-flask python3-markdown iproute2 inotify-tools python3-grpcio python3-protobuf v4l-utils sqlite3 wireguard-tools libcap2-bin"
+MISSING_DEPS=""
+for pkg in $DEPS; do
+    dpkg -s "$pkg" >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS $pkg"
+done
+if [ -n "$MISSING_DEPS" ]; then
+    sudo apt-get update -qq || echo "⚠️  apt update failed, continuing..."
+    sudo apt-get install -y --no-install-recommends $MISSING_DEPS
+else
+    echo "   All dependencies already installed — skipping apt"
+fi
 
 # VPN tooling used by the web UI and fleet discovery. All packages are
 # mandatory — a failure aborts the install (still before services are
 # touched) so a missing dependency is a loud error, not a silent gap.
 # The WireGuard kernel module is in-tree since 5.6, so wireguard-tools (wg,
 # wg-quick) is all we need.
-sudo apt-get install -y wireguard-tools
 # tailscale is only packaged in newer Debian releases; fall back to the
 # official installer (adds their apt repo) on older ones. pkgs.tailscale.com
 # sits behind CloudFront and answers 403 to some egress IPs/regions — the
@@ -336,82 +435,197 @@ sudo systemctl enable --now tailscaled
 # as a non-root user) can attach to the root-owned dzyga process to read
 # frequency via strace. Without this, get_frequency would need sudo on every
 # call (every 2 seconds), flooding the journal with sudo log entries.
-# libcap2-bin provides setcap/getcap; install silently if missing.
-sudo dpkg -s libcap2-bin >/dev/null 2>&1 || sudo apt-get install -y libcap2-bin
+# libcap2-bin provides setcap/getcap; installed via $DEPS above.
 sudo setcap cap_sys_ptrace+ep /usr/bin/strace 2>/dev/null || echo "⚠️  Could not set CAP_SYS_PTRACE on strace (frequency detection may need sudo)"
 
-# Stop and remove all old forpost services FIRST
-echo ""
-echo "[2/5] Stopping and removing old services..."
+# ---- Stage the new tree / source BEFORE touching any service ----------
+# Everything fallible (download, extract, archive verification, mediamtx
+# and dzyga vendor fetches) happens here, while the old install keeps
+# running. A failure exits with services untouched.
+STAGING_DIR=""
+SOURCE_DIR=""
+OLD_DIR=""
+PREFETCH_DIR=""
+DZYGA_SUMS=""
+RESTART_SCOPE="full"
+OLD_HEAD=""
 STREAM_WAS_ACTIVE=false
+
+# Never leave staging/prefetch dirs behind on an early exit (set -e).
+# OLD_DIR ($INSTALL_DIR.old-*) is deliberately NOT cleaned here — it is the
+# rollback copy and is removed only after verification passes.
+cleanup_staging() {
+    [ -n "$STAGING_DIR" ] && [ -d "$STAGING_DIR" ] && rm -rf "$STAGING_DIR"
+    [ -n "$PREFETCH_DIR" ] && [ -d "$PREFETCH_DIR" ] && rm -rf "$PREFETCH_DIR"
+    return 0
+}
+trap cleanup_staging EXIT
+
+echo ""
+echo "[2/6] Preparing new version..."
+
+# Remember stream state and consume uninstall→install marker files before
+# anything is stopped. Markers are created by uninstall.sh to carry service
+# state across an uninstall→install cycle; they are consumed immediately so
+# a failed install cannot leave a stale marker for a later run.
 STREAM_STATE=$(sudo systemctl is-active forpost-stream 2>/dev/null || true)
 if [ "$STREAM_STATE" = "active" ] || [ "$STREAM_STATE" = "activating" ] || [ "$STREAM_STATE" = "reloading" ] || [ -f /tmp/.strema_stream_was_active ]; then
     STREAM_WAS_ACTIVE=true
     echo "📝 Stream service is running - will restart after update"
 fi
-
-# Consume the marker files immediately. They are created by uninstall.sh to
-# carry service state across an uninstall→install cycle. If we leave them and
-# the install fails (set -e), a later install would see a stale marker and
-# start the stream even though the user had stopped it.
-# NOTE: uninstall.sh runs as root (auto-elevates), so the markers are root-
-# owned. We need sudo to remove them.
 sudo rm -f /tmp/.strema_stream_was_active /tmp/.strema_udp_proxy_was_active 2>/dev/null || true
 
-# Stop all services except web interface (to allow online updates to complete)
-for service in forpost-stream forpost-udp-proxy forpost-stream-autorestart.timer \
-               forpost-stream-config.path forpost-stream-watchdog.timer \
-               forpost-power-settings forpost-mediamtx forpost-capture \
-               forpost-hub-relay forpost-hub-webfw forpost-dzyga-proxy; do
-    sudo systemctl stop "$service" 2>/dev/null || true
-    sudo systemctl disable "$service" 2>/dev/null || true
-done
+if [ "$TARBALL_MODE" = "true" ]; then
+    # Stage the release archive next to the install dir (same filesystem,
+    # so the final mv is a rename, not a copy). Hidden name keeps it out of
+    # the way of the running services.
+    STAGING_DIR="$REAL_HOME/.strema-update-$$"
+    mkdir -p "$STAGING_DIR"
+    cd "$STAGING_DIR"
+    download_strema
+    # download_strema leaves SOURCE_DIR relative to the staging dir — make
+    # it absolute before leaving, or every later check/mv resolves wrong.
+    SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
+    cd "$REAL_HOME"
 
-# Remove old service files (web will be updated but not stopped)
-for service_file in /etc/systemd/system/forpost-*.service /etc/systemd/system/forpost-*.timer /etc/systemd/system/forpost-*.path; do
-    [ -f "$service_file" ] || continue
-    service_name=$(basename "$service_file")
-    # Skip web service to allow online update to complete
-    if [ "$service_name" != "forpost-stream-web.service" ]; then
-        sudo rm -f "$service_file"
+    # Verify the archive payload NOW — a truncated download must abort
+    # before services are stopped, not after.
+    if [ ! -d "$SOURCE_DIR/systemd" ] || [ -z "$(ls -A "$SOURCE_DIR/systemd" 2>/dev/null)" ]; then
+        echo "❌ Error: No systemd unit files found in $SOURCE_DIR/systemd/"
+        echo "   The downloaded archive appears to be incomplete."
+        rm -rf "$STAGING_DIR"
+        exit 1
     fi
-done
 
-# --- Update hygiene: artifacts left behind by older versions -----------
-# Drop-in directories for units that were renamed or removed — the glob
-# above only deletes files, not <unit>.d directories.
-for dropin in /etc/systemd/system/forpost-*.service.d /etc/systemd/system/forpost-*.timer.d; do
-    [ -d "$dropin" ] || continue
-    sudo rm -rf "$dropin"
-done
-# Orphaned wants/requires symlinks: `systemctl disable` only removes
-# symlinks for units it can still load; once a unit file is gone they stay
-# behind and keep the unit visible as "not-found".
-sudo find /etc/systemd/system -type l \( -path '*.wants/*' -o -path '*.requires/*' \) \
-    -name 'forpost-*' -delete 2>/dev/null || true
-# Phantom masks and residual failed-state records from removed units —
-# a mask symlink at the unit path was deleted above, but units masked by
-# very old versions may also linger in systemd's runtime state.
-sudo systemctl unmask 'forpost-*' 2>/dev/null || true
-sudo systemctl reset-failed 'forpost-*' 2>/dev/null || true
+    # Pre-install mediamtx into the staged tree. It is idempotent
+    # (sha256-marker skip) and its failure is fatal by design — running it
+    # here means a download failure aborts while services still run; the
+    # post-swap call below becomes a no-op.
+    if [ -x "$SOURCE_DIR/scripts/strema" ]; then
+        sudo STREMA_INSTALL_DIR="$SOURCE_DIR" "$SOURCE_DIR/scripts/strema" install_mediamtx \
+            || { echo "❌ mediamtx install failed — RTSP mounts would stay dead. Fix the cause and rerun install.sh"; rm -rf "$STAGING_DIR"; exit 1; }
+    else
+        sudo python3 "$SOURCE_DIR/scripts/install_mediamtx.py" \
+            || { echo "❌ mediamtx install failed — RTSP mounts would stay dead. Fix the cause and rerun install.sh"; rm -rf "$STAGING_DIR"; exit 1; }
+    fi
 
-sudo systemctl daemon-reload
+    # Decide how much of the fleet needs a restart. Only for UPDATES onto
+    # an existing binary install: compare the compiled binary and the
+    # remaining tree directly instead of trusting release metadata.
+    #   strema.bin identical + only data files differ (web assets,
+    #   templates, docs, installer scripts) → "light": nothing is stopped,
+    #   only forpost-stream-web restarts.
+    #   Anything else (scripts, systemd, config, vendor assets, missing or
+    #   different binary) → "full": the classic stop-everything path.
+    if [ -d "$INSTALL_DIR" ] \
+       && [ -f "$INSTALL_DIR/scripts/strema.dist/strema.bin" ] \
+       && [ -f "$SOURCE_DIR/scripts/strema.dist/strema.bin" ]; then
+        OLD_BIN_SHA=$(sudo sha256sum "$INSTALL_DIR/scripts/strema.dist/strema.bin" 2>/dev/null | cut -d' ' -f1)
+        NEW_BIN_SHA=$(sha256sum "$SOURCE_DIR/scripts/strema.dist/strema.bin" | cut -d' ' -f1)
+        if [ -n "$OLD_BIN_SHA" ] && [ "$OLD_BIN_SHA" = "$NEW_BIN_SHA" ]; then
+            # Binary code is identical — diff the rest of the tree.
+            # Excluded: compiled dist (hashed above), runtime state that is
+            # carried over anyway (logs/, preserved config files), and VCS
+            # noise. "Only in" lines are normalized to repo-relative paths.
+            # The final grep -vE drops runtime-generated artifacts that a
+            # live tree always has but a fresh tarball never ships:
+            # code_core.txt (diagnostic dump, gitignored) and the
+            # install-time mediamtx download under scripts/assets/.
+            DIFF_PATHS=$(diff -qr \
+                --exclude=strema.dist --exclude=logs --exclude=.git \
+                --exclude=__pycache__ --exclude='*.pyc' \
+                --exclude=stream.conf --exclude=fleet.conf \
+                --exclude=multiview_roster.json --exclude=capture_backend.state \
+                --exclude=descrambler_mode.state --exclude=descrambler_stats.json \
+                --exclude=descrambler_stats.clear --exclude=mediamtx.env \
+                --exclude=hub_registry.json --exclude=hub.enabled \
+                --exclude=VERSION --exclude=CHANGED.txt \
+                "$INSTALL_DIR" "$SOURCE_DIR" 2>/dev/null \
+                | sed -e "s|^Files $INSTALL_DIR/||; s| and $SOURCE_DIR/.* differ$||" \
+                      -e "s|^Only in $INSTALL_DIR/\(.*\): |\1/|" \
+                      -e "s|^Only in $SOURCE_DIR/\(.*\): |\1/|" \
+                      -e "s|^Only in $INSTALL_DIR: ||" \
+                      -e "s|^Only in $SOURCE_DIR: ||" \
+                | grep -v '^$' \
+                | grep -vE '(^|/)code_core\.txt$|^scripts/assets/mediamtx' || true)
+            RESTART_SCOPE="light"
+            while IFS= read -r rel; do
+                [ -z "$rel" ] && continue
+                case "$rel" in
+                    */*)
+                        case "$rel" in
+                            web/static/*|web/templates/*|docs/*|tests/*|tools/*|.github/*|.devin/*|.vscode/*) ;;
+                            *) RESTART_SCOPE="full"; break ;;
+                        esac ;;
+                    *)
+                        case "$rel" in
+                            *.md|install.sh|uninstall.sh|pytest.ini|requirements-test.txt|.gitignore|AGENTS.md|code_core.txt) ;;
+                            *) RESTART_SCOPE="full"; break ;;
+                        esac ;;
+                esac
+            done <<< "$DIFF_PATHS"
+            if [ "$RESTART_SCOPE" = "light" ]; then
+                echo "   Binary unchanged, only non-runtime files differ — light update (stream keeps running)"
+            fi
+        fi
+    fi
 
-# Now analyze what we have and what to do
-# (SCRIPT_DIR was resolved to an absolute path at the top of the script,
-#  before the `cd /tmp` that makes relative BASH_SOURCE paths unresolvable.)
-
-# In local install mode we use the source tree already on the device
-if [ "$LOCAL_INSTALL" = "true" ]; then
+    # Prefetch vendor dzyga binaries while the network is (still) free —
+    # the swap itself below only moves local files.
+    if [ -d "$FORPOST_DIR" ]; then
+        DZYGA_SUMS=$(curl -fsSL --connect-timeout 15 "$DZYGA_DIST_BASE/SHA256SUMS.txt" 2>/dev/null || true)
+        if [ -n "$DZYGA_SUMS" ]; then
+            for name in dzyga dzyga_web; do
+                target="$FORPOST_DIR/$name"
+                [ -f "$target" ] || continue
+                want=$(echo "$DZYGA_SUMS" | awk -v f="$name" '$2==f {print $1}')
+                [ -z "$want" ] && continue
+                cur=$(sudo sha256sum "$target" 2>/dev/null | cut -d' ' -f1)
+                [ -n "$cur" ] && [ "$cur" = "$want" ] && continue
+                PREFETCH_DIR="${PREFETCH_DIR:-$(mktemp -d /tmp/strema-dzyga-XXXXXX)}"
+                if curl -fsSL --connect-timeout 15 -o "$PREFETCH_DIR/$name" "$DZYGA_DIST_BASE/$name" \
+                   && echo "$want  $PREFETCH_DIR/$name" | sha256sum -c - >/dev/null 2>&1; then
+                    echo "📥 $name: new canonical build downloaded (applied after update)"
+                else
+                    echo "⚠️  $name: prefetch failed — keeping existing binary"
+                    rm -f "$PREFETCH_DIR/$name"
+                fi
+            done
+        fi
+    fi
+elif [ "$GIT_MODE" = "true" ]; then
+    # Git installation: update the checkout in place. Record HEAD so a
+    # failed verification can roll the tree back.
+    INSTALL_DIR="$SCRIPT_DIR"
+    if [ "$INSTALL_DIR" != "$NEW_INSTALL_DIR" ]; then
+        echo "⚠️  Warning: Git installation is at $INSTALL_DIR"
+        echo "   Expected location: $NEW_INSTALL_DIR"
+        echo "   Continuing with current location..."
+    fi
+    cd "$INSTALL_DIR"
+    OLD_HEAD=$(git rev-parse HEAD 2>/dev/null || true)
+    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+        echo "💾 Stashing local changes..."
+        git stash push -m "Auto-stash before install.sh update $(date +%Y%m%d_%H%M%S)"
+    fi
+    echo "Updating from git..."
+    git fetch origin
+    if [ "$VERSION" = "latest" ]; then
+        echo "Pulling latest from master..."
+        git reset --hard origin/master
+    else
+        echo "Checking out version $VERSION..."
+        git fetch --tags
+        git reset --hard "$VERSION"
+    fi
+    echo "✅ Git update complete"
+    cd /tmp
+elif [ "$LOCAL_INSTALL" = "true" ]; then
     INSTALL_DIR="$SCRIPT_DIR"
 fi
 
-OLD_INSTALL_DIR="$REAL_HOME/FORPOST/strema"
-NEW_INSTALL_DIR="$REAL_HOME/strema"
-INSTALL_DIR="$NEW_INSTALL_DIR"
-
-# Check for migration
-if [ -d "$OLD_INSTALL_DIR" ]; then
+# Migrate a legacy FORPOST/strema install to ~/strema before the swap.
+if [ -d "$OLD_INSTALL_DIR" ] && [ "$TARBALL_MODE" = "true" ]; then
     if [ ! -d "$NEW_INSTALL_DIR" ]; then
         echo ""
         echo "⚠️  Found old installation at: $OLD_INSTALL_DIR"
@@ -427,98 +641,72 @@ if [ -d "$OLD_INSTALL_DIR" ]; then
     fi
 fi
 
-# Check installation type and update files. A local archive argument
-# (-f file) always wins over git mode: the user explicitly asked for
-# that tarball, so the tree must be replaced rather than git-reset.
-if [ -d "$SCRIPT_DIR/.git" ] && [ "$LOCAL_INSTALL" != "true" ] && [ ! -f "$VERSION" ]; then
-    # Git installation
-    echo ""
-    echo "📁 Git installation detected"
-    
-    if [ "$SCRIPT_DIR" != "$INSTALL_DIR" ]; then
-        echo "⚠️  Warning: Git installation is at $SCRIPT_DIR"
-        echo "   Expected location: $INSTALL_DIR"
-        echo "   Continuing with current location..."
-        INSTALL_DIR="$SCRIPT_DIR"
-    fi
-    
-    cd "$INSTALL_DIR"
-    
-    # Stash local changes
-    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-        echo "💾 Stashing local changes..."
-        git stash push -m "Auto-stash before install.sh update $(date +%Y%m%d_%H%M%S)"
-    fi
-    
-    # Update from git
-    echo "Updating from git..."
-    git fetch origin
-    
-    if [ "$VERSION" = "latest" ]; then
-        echo "Pulling latest from master..."
-        git reset --hard origin/master
-    else
-        echo "Checking out version $VERSION..."
-        git fetch --tags
-        git reset --hard "$VERSION"
-    fi
-    
-    echo "✅ Git update complete"
-    
-elif [ "$LOCAL_INSTALL" != "true" ]; then
-    # Remote installation (fresh or update)
-    if [ -d "$INSTALL_DIR" ]; then
-        echo ""
-        echo "🌐 Remote installation - updating"
-    else
-        echo ""
-        echo "🌐 Remote installation - fresh install"
-    fi
-    
-    # Backup device-local config/state and logs (the tree is replaced
-    # wholesale below). Keep in sync with RSYNC_SOURCE_EXCLUDES in
-    # tools/deploy.sh: user config, fleet roster, generated capture/mediamtx
-    # state, the operator's descrambler mode and monitor statistics.
-    LOCAL_CONFIG_FILES="stream.conf fleet.conf multiview_roster.json capture_backend.state descrambler_mode.state descrambler_stats.json descrambler_stats.clear mediamtx.env hub_registry.json"
-    TMP_CONFIG_BACKUP=""
-    if [ -d "$INSTALL_DIR/config" ]; then
-        TMP_CONFIG_BACKUP="/tmp/strema_config_backup_$$"
-        mkdir -p "$TMP_CONFIG_BACKUP"
-        for f in $LOCAL_CONFIG_FILES; do
-            [ -f "$INSTALL_DIR/config/$f" ] && cp -p "$INSTALL_DIR/config/$f" "$TMP_CONFIG_BACKUP/"
-        done
-    fi
-    if [ -d "$INSTALL_DIR/logs" ]; then
-        TMP_LOGS_BACKUP="/tmp/strema_logs_backup_$$"
-        cp -a "$INSTALL_DIR/logs" "$TMP_LOGS_BACKUP" 2>/dev/null || TMP_LOGS_BACKUP=""
-    fi
-    
-    # Download and extract
-    TMP_DIR=$(mktemp -d)
-    cd "$TMP_DIR"
-    download_strema
-    
-    # Replace / install files
-    sudo rm -rf "$INSTALL_DIR"
-    mkdir -p "$REAL_HOME"
-    mv "$SOURCE_DIR" "$INSTALL_DIR"
-    
-    # Restore config and logs if backups were created
-    if [ -n "$TMP_CONFIG_BACKUP" ] && [ -d "$TMP_CONFIG_BACKUP" ]; then
-        mkdir -p "$INSTALL_DIR/config"
-        cp -a "$TMP_CONFIG_BACKUP/." "$INSTALL_DIR/config/"
-        rm -rf "$TMP_CONFIG_BACKUP"
-    fi
-    if [ -n "$TMP_LOGS_BACKUP" ] && [ -d "$TMP_LOGS_BACKUP" ]; then
-        mkdir -p "$INSTALL_DIR/logs"
-        cp -a "$TMP_LOGS_BACKUP/." "$INSTALL_DIR/logs/"
-        rm -rf "$TMP_LOGS_BACKUP"
-    fi
-    
-    cd "$REAL_HOME"
-    rm -rf "$TMP_DIR"
-    echo "✅ Download complete"
+# ==========================================================================
+# Phase 2 — downtime window. In "full" scope all services (except the web
+# UI, which must survive to host this very update) are stopped and stale
+# unit files removed. In "light" scope nothing is stopped: the tree swap
+# below is two renames and running processes keep their (identical) code.
+# ==========================================================================
+echo ""
+echo "[3/6] Switching to new version..."
+
+if [ "$RESTART_SCOPE" = "full" ]; then
+    echo "Stopping services..."
+    for service in forpost-stream forpost-udp-proxy forpost-stream-autorestart.timer \
+                   forpost-stream-config.path forpost-stream-watchdog.timer \
+                   forpost-power-settings forpost-mediamtx forpost-capture \
+                   forpost-hub-relay forpost-hub-webfw forpost-dzyga-proxy; do
+        sudo systemctl stop "$service" 2>/dev/null || true
+        sudo systemctl disable "$service" 2>/dev/null || true
+    done
+
+    # Unit files are NOT deleted here: services are already stopped+disabled,
+    # and phase 3 reinstalls shipped units only when their content changed
+    # (remove_stale_units drops the ones no longer shipped).
+
+    # --- Update hygiene: artifacts left behind by older versions -----------
+    # Drop-in directories for units that were renamed or removed — the glob
+    # above only deletes files, not <unit>.d directories.
+    for dropin in /etc/systemd/system/forpost-*.service.d /etc/systemd/system/forpost-*.timer.d; do
+        [ -d "$dropin" ] || continue
+        sudo rm -rf "$dropin"
+    done
+    # Orphaned wants/requires symlinks: `systemctl disable` only removes
+    # symlinks for units it can still load; once a unit file is gone they stay
+    # behind and keep the unit visible as "not-found".
+    sudo find /etc/systemd/system -type l \( -path '*.wants/*' -o -path '*.requires/*' \) \
+        -name 'forpost-*' -delete 2>/dev/null || true
+    # Phantom masks and residual failed-state records from removed units —
+    # a mask symlink at the unit path was deleted above, but units masked by
+    # very old versions may also linger in systemd's runtime state.
+    sudo systemctl unmask 'forpost-*' 2>/dev/null || true
+    sudo systemctl reset-failed 'forpost-*' 2>/dev/null || true
+
+    sudo systemctl daemon-reload
+else
+    echo "Light update — services keep running, only the web UI restarts."
 fi
+
+# Swap the install tree. mv is a rename on the same filesystem: the old
+# tree stays available as $OLD_DIR for rollback until verification
+# passes, and there is no window where ~/strema does not exist.
+if [ "$TARBALL_MODE" = "true" ]; then
+    if [ -d "$INSTALL_DIR" ]; then
+        OLD_DIR="$INSTALL_DIR.old-$$"
+        mv "$INSTALL_DIR" "$OLD_DIR"
+        if ! mv "$SOURCE_DIR" "$INSTALL_DIR"; then
+            echo "❌ Failed to move new tree into place — restoring previous install"
+            mv "$OLD_DIR" "$INSTALL_DIR"
+            rm -rf "$STAGING_DIR"
+            exit 1
+        fi
+        link_local_state "$OLD_DIR" "$INSTALL_DIR"
+        echo "✅ Previous version kept at $OLD_DIR until verification passes"
+    else
+        mv "$SOURCE_DIR" "$INSTALL_DIR"
+    fi
+fi
+SCRIPT_DIR="$INSTALL_DIR"
 
 # Create/update VERSION file (not tracked in git, so must be generated)
 if [ "$VERSION" = "master" ]; then
@@ -537,25 +725,28 @@ elif [ "$VERSION" = "latest" ]; then
         echo "unknown" > "$INSTALL_DIR/VERSION"
     fi
 else
-    # Specific version like v0.1.0 - strip 'v' prefix
+    # Specific version like v0.1.0 - strip 'v' prefix; local archive installs
+    # normalized VERSION to the archive's VERSION file in download_strema,
+    # and LOCAL_INSTALL writes "local" here exactly like before.
     echo "${VERSION#v}" > "$INSTALL_DIR/VERSION"
 fi
 
-SCRIPT_DIR="$INSTALL_DIR"
-
-# Prepare project files
+# ==========================================================================
+# Phase 3 — configure the new tree and bring services back.
+# ==========================================================================
 echo ""
-echo "[3/5] Preparing project files..."
+echo "[4/6] Configuring services..."
+
 chmod +x "$SCRIPT_DIR/scripts/"*.sh "$SCRIPT_DIR/scripts/"*.py \
     "$SCRIPT_DIR/web/"web_config.py 2>/dev/null || true
 
 # MediaMTX (the device's RTSP server) is not part of the release tarball —
 # every install/update already requires internet for the archive itself, so
-# the pinned binary is downloaded here and checksum-verified. Failure is
+# the pinned binary is downloaded here and checksum-verified. For tarball
+# installs it was already fetched into the staged tree above and this call
+# is a fast no-op; for git/local installs it does the real work. Failure is
 # FATAL: a silent miss leaves forpost-mediamtx dead (ConditionPathExists)
 # while the install reports success — a broken device that looks healthy.
-# Better to abort loudly here and let a rerun fix it once the cause
-# (network, helper crash) is resolved.
 # STREMA_INSTALL_DIR is required when the binary runs outside systemd (see
 # the handle_config_change call below for the rationale).
 if [ -x "$SCRIPT_DIR/scripts/strema" ]; then
@@ -636,7 +827,16 @@ fi
 # Clean up our temp files from previous run. Do NOT remove
 # /tmp/dzyga_freq_current.txt — dzyga creates it only on frequency change,
 # so deleting it would leave us blind until the next frequency change.
-sudo rm -f /tmp/strema_* 2>/dev/null || true
+# Also preserved: the config snapshot and cached firmware version (a light
+# update must not invalidate them — handle_config_change would otherwise
+# restart the stream on the next unrelated config edit) and the web-update
+# log, which is this very install's stdout when triggered from the UI.
+sudo sh -c 'for f in /tmp/strema_*; do
+    case "$f" in
+        */strema_config_snapshot.conf|*/strema_dzyga_fw_version.txt|*/strema_web_update.log) ;;
+        *) rm -f "$f" ;;
+    esac
+done' 2>/dev/null || true
 # Also clean up old-name files from previous versions (migration)
 sudo rm -f /tmp/dzyga_freq.txt /tmp/dzyga_scanning_state.txt \
           /tmp/dzyga_dynamic_overlay.txt /tmp/dzyga_last_freq_dynamic.txt \
@@ -672,95 +872,53 @@ EOF
     fi
 fi
 
-# Replace one vendor binary when the on-device build differs from the
-# canonical one. Args: $1 = component name (dzyga|dzyga_web),
-# $2 = canonical sha256 from the release's SHA256SUMS.txt (empty = unknown,
-#      MISSING_ENTRY = sums file present but has no entry for this asset).
-update_dzyga_component() {
-    local name="$1" want_sha="$2"
-    local target="$FORPOST_DIR/$name"
-    [ -f "$target" ] || return 0
-    if [ -z "$want_sha" ]; then
-        echo "⚠️  $name: SHA256SUMS.txt unavailable — cannot tell if update needed, skipping"
-        return 0
-    elif [ "$want_sha" = "MISSING_ENTRY" ]; then
-        echo "⚠️  $name: no checksum entry in SHA256SUMS.txt — skipping"
-        return 0
-    fi
-    local cur_sha
-    cur_sha=$(sudo sha256sum "$target" 2>/dev/null | cut -d' ' -f1)
-    [ -n "$cur_sha" ] || return 0
-    [ "$cur_sha" = "$want_sha" ] && return 0   # already the canonical build
-    echo "🔄 $name: differs from the canonical build — updating"
-    local tmp="/tmp/strema_dzyga_dist_$name"
-    if ! curl -fsSL --connect-timeout 15 -o "$tmp" "$DZYGA_DIST_BASE/$name"; then
-        echo "⚠️  $name: download failed — keeping existing binary"
-        return 0
-    fi
-    if ! echo "$want_sha  $tmp" | sha256sum -c - >/dev/null 2>&1; then
-        echo "⚠️  $name: checksum mismatch — keeping existing binary"
-        rm -f "$tmp"
-        return 0
-    fi
-    # Delegate the swap (backup, service stop/start, owner/mode restore,
-    # md5-cache cleanup) to the single implementation shared by the web UI
-    # and fleet updates — see remote_script() in scripts/update_binary.py.
-    if [ -x "$INSTALL_DIR/scripts/strema" ]; then
-        STREMA_INSTALL_DIR="$INSTALL_DIR" "$INSTALL_DIR/scripts/strema" update_binary "$name" "$tmp" || true
-    elif [ -f "$INSTALL_DIR/scripts/update_binary.py" ]; then
-        python3 "$INSTALL_DIR/scripts/update_binary.py" "$name" "$tmp" || true
-    else
-        echo "⚠️  $name: update_binary helper not found — keeping existing binary"
-    fi
-    rm -f "$tmp"
-    return 0
-}
-
-# Update vendor binaries that differ from the canonical dist release.
+# Apply prefetched vendor dzyga binaries downloaded during phase 1. The
+# checksum was already verified against the release's SHA256SUMS.txt; the
+# actual swap (backup, service restart, owner/mode restore, md5-cache
+# cleanup) is delegated to update_binary — the same implementation the web
+# UI and fleet updates use.
+if [ -n "$PREFETCH_DIR" ] && [ -d "$PREFETCH_DIR" ]; then
+    for f in "$PREFETCH_DIR"/*; do
+        [ -f "$f" ] || continue
+        name=$(basename "$f")
+        want=$(echo "$DZYGA_SUMS" | awk -v n="$name" '$2==n {print $1}')
+        if [ -n "$want" ] && echo "$want  $f" | sha256sum -c - >/dev/null 2>&1; then
+            echo "🔄 $name: applying canonical build"
+            if [ -x "$INSTALL_DIR/scripts/strema" ]; then
+                STREMA_INSTALL_DIR="$INSTALL_DIR" "$INSTALL_DIR/scripts/strema" update_binary "$name" "$f" || true
+            elif [ -f "$INSTALL_DIR/scripts/update_binary.py" ]; then
+                python3 "$INSTALL_DIR/scripts/update_binary.py" "$name" "$f" || true
+            fi
+        fi
+    done
+    rm -rf "$PREFETCH_DIR"
+fi
 # Missing FORPOST dir means this is not an original FORPOST device — skip.
-if [ -d "$FORPOST_DIR" ]; then
-    dzyga_sums=$(curl -fsSL --connect-timeout 15 "$DZYGA_DIST_BASE/SHA256SUMS.txt" 2>/dev/null || true)
-    dzyga_sum_for() {
-        if [ -z "$dzyga_sums" ]; then echo; return; fi
-        local s
-        s=$(echo "$dzyga_sums" | awk -v f="$1" '$2==f {print $1}')
-        echo "${s:-MISSING_ENTRY}"
-    }
-    update_dzyga_component "dzyga" "$(dzyga_sum_for dzyga)" || true
-    update_dzyga_component "dzyga_web" "$(dzyga_sum_for dzyga_web)" || true
-    unset -f dzyga_sum_for
-else
+if [ ! -d "$FORPOST_DIR" ]; then
     echo "⚠️  $FORPOST_DIR not found — not a FORPOST device, skipping dzyga update"
+elif [ -z "$DZYGA_SUMS" ]; then
+    echo "⚠️  dzyga SHA256SUMS.txt unavailable — cannot tell if update needed, skipping"
 fi
 
-# Install systemd services
+# Install systemd services — only units whose rendered content actually
+# changed are rewritten (a daemon-reload is still required afterwards).
+# In "light" scope the tree's systemd/ payload is provably identical to the
+# running one, so the whole step is skipped.
 echo ""
-echo "[4/5] Installing systemd services..."
-if [ ! -d "$SCRIPT_DIR/systemd" ] || [ -z "$(ls -A "$SCRIPT_DIR/systemd" 2>/dev/null)" ]; then
-    echo "❌ Error: No systemd unit files found in $SCRIPT_DIR/systemd/"
-    echo "   The downloaded archive appears to be incomplete."
-    echo "   Try specifying a version explicitly:"
-    echo "     curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/master/install.sh | bash -s v0.0.1-beta.05"
-    exit 1
-fi
-for file in "$SCRIPT_DIR/systemd"/*; do
-    [ -f "$file" ] || continue
-    name=$(basename "$file")
-    if grep -q "__INSTALL_DIR__" "$file"; then
-        sudo sed "s|__INSTALL_DIR__|$SCRIPT_DIR|g" "$file" > "/tmp/$name"
-        sudo mv "/tmp/$name" "/etc/systemd/system/$name"
-    else
-        sudo cp "$file" "/etc/systemd/system/$name"
+echo "[5/6] Installing systemd services..."
+if [ "$RESTART_SCOPE" = "full" ]; then
+    if [ ! -d "$SCRIPT_DIR/systemd" ] || [ -z "$(ls -A "$SCRIPT_DIR/systemd" 2>/dev/null)" ]; then
+        echo "❌ Error: No systemd unit files found in $SCRIPT_DIR/systemd/"
+        echo "   The downloaded archive appears to be incomplete."
+        echo "   Try specifying a version explicitly:"
+        echo "     curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/master/install.sh | bash -s v0.0.1-beta.05"
+        exit 1
     fi
-done
-
-sudo systemctl daemon-reload
+    remove_stale_units
+    install_units "$SCRIPT_DIR"
+fi
 
 # Start services
-echo ""
-echo "[5/5] Starting services..."
-
-# Always-on services, common to hub and device modes.
 sudo systemctl enable --now forpost-stream-web
 # RTSP server: always-on like the web UI. Its UDP sources are
 # fire-and-forget, so it runs regardless of stream state; with the binary
@@ -794,35 +952,46 @@ else
     # no longer hold the camera hostage.
     # Free the camera node from any stale holder (dead service remnants,
     # an orphaned ffmpeg) so forpost-capture can open it cleanly. Every
-    # legitimate holder was stopped above or masked (rtsp-server).
-    VIDEO_NODE=$(grep -h -oP '^VIDEO_DEVICE=\K\S+' "$SCRIPT_DIR/config/defaults.conf" "$SCRIPT_DIR/config/stream.conf" 2>/dev/null | tr -d '"'"'" | tail -1)
-    case "$VIDEO_NODE" in
-        devvideo*) VIDEO_NODE="/dev/video${VIDEO_NODE#devvideo}" ;;
-        /dev/*)    : ;;
-        *)         VIDEO_NODE="" ;;
-    esac
-    if [ -n "$VIDEO_NODE" ] && [ -e "$VIDEO_NODE" ] && \
-       sudo fuser "$VIDEO_NODE" >/dev/null 2>&1; then
-        echo "⚠️  $VIDEO_NODE still held by a stale process — releasing"
-        sudo fuser -k "$VIDEO_NODE" 2>/dev/null || true
+    # legitimate holder was stopped above or masked (rtsp-server). In
+    # "light" scope nothing was stopped, so only kill a holder when the
+    # capture service itself is not running.
+    if [ "$RESTART_SCOPE" = "full" ]; then
+        VIDEO_NODE=$(grep -h -oP '^VIDEO_DEVICE=\K\S+' "$SCRIPT_DIR/config/defaults.conf" "$SCRIPT_DIR/config/stream.conf" 2>/dev/null | tr -d '"'"'" | tail -1)
+        case "$VIDEO_NODE" in
+            devvideo*) VIDEO_NODE="/dev/video${VIDEO_NODE#devvideo}" ;;
+            /dev/*)    : ;;
+            *)         VIDEO_NODE="" ;;
+        esac
+        if [ -n "$VIDEO_NODE" ] && [ -e "$VIDEO_NODE" ] && \
+           sudo fuser "$VIDEO_NODE" >/dev/null 2>&1; then
+            echo "⚠️  $VIDEO_NODE still held by a stale process — releasing"
+            sudo fuser -k "$VIDEO_NODE" 2>/dev/null || true
+        fi
     fi
     sudo systemctl enable --now forpost-capture 2>/dev/null || true
 
-    # Enable on boot only (don't start now)
+    # Enable on boot only (don't start now). In "light" scope these
+    # disables are skipped: handle_config_change does not run either, so
+    # removing the boot symlinks here would silently change the next
+    # boot's autostart state on an update that changed no config.
     sudo systemctl enable forpost-power-settings 2>/dev/null || true
-
-    # Disable by default (controlled via web UI)
-    sudo systemctl disable forpost-stream 2>/dev/null || true
-    sudo systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
+    if [ "$RESTART_SCOPE" = "full" ]; then
+        # Disable by default (controlled via web UI)
+        sudo systemctl disable forpost-stream 2>/dev/null || true
+        sudo systemctl disable forpost-stream-autorestart.timer 2>/dev/null || true
+    fi
 fi
 
 # Apply configuration settings (autostart, auto-restart, etc.)
-# Remove snapshot so handle_config_change.sh re-applies all settings from config
-rm -f /tmp/strema_config_snapshot.conf 2>/dev/null || true
-# Drop the cached DZYGA firmware version so the web service re-reads it
-# via the OLED menu after this install (it may have been re-flashed).
-rm -f /tmp/strema_dzyga_fw_version.txt 2>/dev/null || true
-if [ "$HUB_MODE" != "1" ] && [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
+# Remove snapshot so handle_config_change.sh re-applies all settings from config.
+# Skipped entirely in "light" scope: the config tree is provably unchanged,
+# and with no snapshot present handle_config_change would restart the
+# stream unconditionally — exactly what a light update must not do.
+if [ "$RESTART_SCOPE" = "full" ] && [ "$HUB_MODE" != "1" ] && [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
+    rm -f /tmp/strema_config_snapshot.conf 2>/dev/null || true
+    # Drop the cached DZYGA firmware version so the web service re-reads it
+    # via the OLED menu after this install (it may have been re-flashed).
+    rm -f /tmp/strema_dzyga_fw_version.txt 2>/dev/null || true
     echo "Applying configuration settings..."
     # handle_config_change.py runs `systemctl enable/disable`, which needs
     # root. When invoked from systemd (forpost-stream-config.service) it runs
@@ -841,8 +1010,9 @@ if [ "$HUB_MODE" != "1" ] && [ -f "$SCRIPT_DIR/config/stream.conf" ]; then
     fi
 fi
 
-# Restart services if they were running before update
-if [ "$HUB_MODE" != "1" ] && [ "$STREAM_WAS_ACTIVE" = "true" ]; then
+# Restart services if they were running before update. Only in "full"
+# scope — a light update never stopped them.
+if [ "$RESTART_SCOPE" = "full" ] && [ "$HUB_MODE" != "1" ] && [ "$STREAM_WAS_ACTIVE" = "true" ]; then
     echo "Restarting stream service..."
     sudo systemctl start forpost-stream || true
     # Give the service a moment to become active; if it failed, the web UI can be used to start it
@@ -853,15 +1023,143 @@ if [ "$HUB_MODE" != "1" ] && [ "$STREAM_WAS_ACTIVE" = "true" ]; then
 fi
 sudo rm -f /tmp/.strema_stream_was_active 2>/dev/null || true
 
-# Restart web service to pick up new code
+# Restart web service to pick up new code/assets (always — even a light
+# update needs the new ASSET_VERSION so browsers refetch static files).
 sudo systemctl restart forpost-stream-web
 
 echo "✅ Services configured"
 
-# Show info
+# ==========================================================================
+# Phase 4 — verify, then either drop the old tree or roll back to it.
+# ==========================================================================
+echo ""
+echo "[6/6] Verifying installation..."
+
+rollback_install() {
+    echo "❌ Update verification failed — rolling back to the previous version..."
+    if [ -n "$OLD_DIR" ] && [ -d "$OLD_DIR" ]; then
+        local FAILED_DIR="$INSTALL_DIR.failed-$$"
+        mv "$INSTALL_DIR" "$FAILED_DIR" 2>/dev/null || true
+        mv "$OLD_DIR" "$INSTALL_DIR"
+        # Return the preserved device state to the restored tree.
+        local f
+        for f in $LOCAL_CONFIG_FILES; do
+            [ -f "$FAILED_DIR/config/$f" ] && mv -f "$FAILED_DIR/config/$f" "$INSTALL_DIR/config/" 2>/dev/null || true
+        done
+        if [ -d "$FAILED_DIR/logs" ]; then
+            rm -rf "$INSTALL_DIR/logs" 2>/dev/null || true
+            mv "$FAILED_DIR/logs" "$INSTALL_DIR/logs" 2>/dev/null || true
+        fi
+        # Reinstall the previous units and bring back the previous service
+        # set — mirrors the normal enable block below.
+        install_units "$INSTALL_DIR" force
+        sudo systemctl enable --now forpost-stream-web forpost-mediamtx 2>/dev/null || true
+        if [ "$HUB_MODE" = "1" ]; then
+            sudo systemctl enable --now forpost-hub-relay forpost-hub-webfw 2>/dev/null || true
+        else
+            sudo systemctl enable --now forpost-stream-config.path forpost-stream-watchdog.timer \
+                forpost-dzyga-proxy forpost-capture 2>/dev/null || true
+            if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
+                sudo systemctl start forpost-stream 2>/dev/null || true
+            fi
+        fi
+        rm -f /tmp/strema_config_snapshot.conf /tmp/strema_dzyga_fw_version.txt 2>/dev/null || true
+        if [ "$HUB_MODE" != "1" ] && [ -f "$INSTALL_DIR/config/stream.conf" ]; then
+            if [ -x "$INSTALL_DIR/scripts/strema" ]; then
+                sudo STREMA_INSTALL_DIR="$INSTALL_DIR" "$INSTALL_DIR/scripts/strema" handle_config_change 2>/dev/null || true
+            else
+                sudo python3 "$INSTALL_DIR/scripts/handle_config_change.py" 2>/dev/null || true
+            fi
+        fi
+        sudo systemctl restart forpost-stream-web 2>/dev/null || true
+        rm -rf "$FAILED_DIR"
+        echo "↩️  Rolled back to the previous installation ($OLD_DIR restored)"
+    elif [ "$GIT_MODE" = "true" ] && [ -n "$OLD_HEAD" ]; then
+        # Git installs have no tree copy — roll back via git itself.
+        echo "↩️  Rolling back git checkout to $OLD_HEAD..."
+        cd "$INSTALL_DIR" 2>/dev/null || exit 1
+        git reset --hard "$OLD_HEAD" || true
+        git stash pop 2>/dev/null || true
+        cd /tmp
+        install_units "$INSTALL_DIR" force
+        sudo systemctl enable --now forpost-stream-web forpost-mediamtx 2>/dev/null || true
+        if [ "$HUB_MODE" != "1" ]; then
+            sudo systemctl enable --now forpost-stream-config.path forpost-stream-watchdog.timer \
+                forpost-dzyga-proxy forpost-capture 2>/dev/null || true
+            if [ "$STREAM_WAS_ACTIVE" = "true" ]; then
+                sudo systemctl start forpost-stream 2>/dev/null || true
+            fi
+            rm -f /tmp/strema_config_snapshot.conf 2>/dev/null || true
+            if [ -f "$INSTALL_DIR/config/stream.conf" ]; then
+                if [ -f "$INSTALL_DIR/scripts/strema" ]; then
+                    sudo STREMA_INSTALL_DIR="$INSTALL_DIR" "$INSTALL_DIR/scripts/strema" handle_config_change 2>/dev/null || true
+                else
+                    sudo python3 "$INSTALL_DIR/scripts/handle_config_change.py" 2>/dev/null || true
+                fi
+            fi
+        fi
+        sudo systemctl restart forpost-stream-web 2>/dev/null || true
+        echo "↩️  Rolled back git checkout to $OLD_HEAD"
+    else
+        echo "⚠️  No previous installation available — leaving the new tree in place."
+        echo "   Recover manually: rerun install.sh with the previous version tag,"
+        echo "   or restore from your own backup. Logs: /tmp/strema_web_update.log"
+    fi
+    exit 1
+}
+
+VERIFY_OK=true
+
+# The web API must answer on localhost — loopback is explicitly allowed by
+# the hub :8081 firewall, so this check works on hubs too.
+WEB_OK=false
+for _ in $(seq 1 30); do
+    if curl -fsS --max-time 5 http://127.0.0.1:8081/api/version >/dev/null 2>&1; then
+        WEB_OK=true
+        break
+    fi
+    sleep 3
+done
+if [ "$WEB_OK" != "true" ]; then
+    echo "⚠️  Web interface did not come up on :8081"
+    VERIFY_OK=false
+fi
+
+# The stream must be active again when a full-scope update restarted it.
+# "activating" counts as healthy: Type=simple flips through it on every
+# (re)start and a crash-loop still reports activating between restarts.
+if [ "$RESTART_SCOPE" = "full" ] && [ "$HUB_MODE" != "1" ] && [ "$STREAM_WAS_ACTIVE" = "true" ]; then
+    STREAM_OK=false
+    for _ in $(seq 1 30); do
+        STREAM_STATE=$(sudo systemctl is-active forpost-stream 2>/dev/null || true)
+        if [ "$STREAM_STATE" = "active" ] || [ "$STREAM_STATE" = "activating" ]; then
+            STREAM_OK=true
+            break
+        fi
+        sleep 3
+    done
+    if [ "$STREAM_OK" != "true" ]; then
+        echo "⚠️  forpost-stream is not active after update (state: ${STREAM_STATE:-unknown})"
+        VERIFY_OK=false
+    fi
+fi
+
+if [ "$VERIFY_OK" != "true" ]; then
+    rollback_install
+fi
+
+# Verification passed — the previous tree is no longer needed. The old
+# tree can hold root-owned artifacts (e.g. __pycache__ written by
+# sudo-run helpers), so a plain rm -rf as the service user fails partway
+# — escalate to sudo and never let cleanup abort a good install.
+if [ -n "$OLD_DIR" ] && [ -d "$OLD_DIR" ]; then
+    rm -rf "$OLD_DIR" 2>/dev/null || sudo rm -rf "$OLD_DIR" 2>/dev/null || true
+fi
+rm -rf "$STAGING_DIR" 2>/dev/null || true
+
 echo ""
 echo "=========================================="
-echo "[6/6] Installation complete!"
+echo "✅ Installation complete!"
 echo "=========================================="
 IP_ADDRESS=$(hostname -I 2>/dev/null | awk '{print $1}')
 echo ""
